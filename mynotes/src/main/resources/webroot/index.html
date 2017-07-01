@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+	content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="description" content="">
+<meta name="author" content="">
+<link rel="icon" href="pic/favicon.ico">
+
+<title>My Notes</title>
+
+<!-- css -->
+<link href="css/font-awesome.css" rel="stylesheet" type='text/css'>
+<link href="css/bootstrap.min.css" rel="stylesheet">
+<link href="css/signin.css" rel="stylesheet">
+
+
+<!-- js -->
+<script src="js/tether.min.js"></script>
+<script src="js/jquery-3.2.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="js/bootstrap-imageupload.js"></script>
+</head>
+
+<body>
+
+	<div class="view">
+	
+		<div class="container">
+		
+			<div class="row">
+				<div class="col"></div>
+			</div>
+		
+			<div class="row">
+		
+				<div class="col col-md-8"></div>
+		
+				<div class="col col-md-4">
+		
+						<ul class="nav justify-content-end">
+						  <li class="nav-item">
+						    <a class="nav-link active" href="#">About</a>
+						  </li>
+						  <li class="nav-item">
+						    <a class="nav-link" href="#">Contact</a>
+						  </li>
+						  <li class="nav-item">
+						    <a class="nav-link" href="#">Help</a>
+						  </li>
+						</ul>
+				</div>
+			</div>
+	
+	
+			<div class="row">
+				<div class="col"></div>
+			</div>
+	
+			<div class="row">
+			
+				<div class="col"></div>
+	    		
+	    		<div class="col-6">
+	
+						<ul class="nav nav-tabs" id="myTab" role="tablist">
+							<li class="nav-item">
+								<a class="nav-link active" data-toggle="tab" href="#login" role="tab">Log in</a>
+							</li>
+							<li class="nav-item">
+								<a class="nav-link" data-toggle="tab" href="#signup" role="tab">Sign up</a>
+							</li>
+						</ul>
+			
+						<div class="tab-content">
+							<div id="login" class="tab-pane fade show active">
+				
+								<form class="form-signin" action="/login" method="post">
+									
+									<h2 class="form-signin-heading">Please log in</h2>
+									
+									<label for="login_email" class="sr-only">Email address</label> 
+									<input type="email" id="login_email" class="form-control" name="login_email"
+										placeholder="Email address" required autofocus> 
+									
+									<label for="login_password" class="sr-only">Password</label> 
+									<input type="password" id="login_password" class="form-control" name="login_password"
+										placeholder="Password" required>
+									
+									
+									<div class="checkbox">
+										<label> <input type="checkbox" value="remember-me">
+											Remember me
+										</label>
+									</div>
+									
+									<button class="btn btn-outline-primary btn-block login" type="submit">Login in</button>
+								</form>
+				
+				
+							</div>
+							
+							<div id="signup" class="imageupload tab-pane fade">
+								<form class="form-signin" action="/signup" method="post">
+									<h2 class="form-signin-heading">Please sign up</h2>
+									
+									<label for="fullName" class="sr-only">Full name</label> 
+									<input type="text" id="fullName" class="form-control" name="fullName"
+										placeholder="Full name" required autofocus> 
+									
+									
+									<label for="signup_email" class="sr-only">Email address</label> 
+									<input type="email" id="signup_email" class="form-control" name="signup_email"
+										placeholder="Email address" required> 
+										
+									<label for="signup_reemail" class="sr-only">Re-enter email address</label> 
+									<input type="email" id="signup_reemail" class="form-control" name="signup_reemail"
+										placeholder="Re-enter email address" required> 	
+										
+									<label for="signup_password" class="sr-only">Password</label> 
+									<input type="password" id="signup_password" class="form-control" name="signup_password"
+										placeholder="Password" required>
+									
+									<!-- 
+									<div class="file-tab panel-body">
+										<label class="btn btn-outline-primary btn-file">
+											<i class="fa fa-camera fa-2x" aria-hidden="true"></i>
+											<input type="file" style="display:none;">
+										</label>
+									</div>
+									 -->
+									<button class="btn btn-outline-primary btn-block signup" type="submit">Sign up</button>
+									
+								</form>
+							</div>
+						</div>
+				</div>
+				
+				<div class="col"></div>
+				
+			</div>	
+			
+		</div>
+		
+	</div>	
+
+	<!-- Bootstrap core JavaScript
+    ================================================== -->
+	<!-- Placed at the end of the document so the pages load faster -->
+	<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+	
+	<script>
+            var $imageupload = $('.imageupload');
+            $imageupload.imageupload({
+                allowedFormats: [ 'jpg', 'jpeg', 'png', 'gif' ],
+                maxFileSizeKb: 512,
+                maxWidth: 80,
+                maxHeight: 80
+            });
+        </script>
+	
+	<script src="js/ie10-viewport-bug-workaround.js"></script>
+</body>
+</html>
