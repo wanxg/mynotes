@@ -3,6 +3,10 @@ package com.wanxg.mynotes.database;
 import java.util.Arrays;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.wanxg.mynotes.FailureCode;
 import com.wanxg.mynotes.EventBusAddress;
 
 import io.vertx.core.AbstractVerticle;
@@ -10,8 +14,6 @@ import io.vertx.core.Future;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.auth.jdbc.JDBCAuth;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.ResultSet;
@@ -20,29 +22,30 @@ import io.vertx.ext.sql.SQLConnection;
 public class DatabaseVerticle extends AbstractVerticle {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseVerticle.class);
-	private JDBCClient dbClient;
-	private JDBCAuth authProvider;
+	
+	public static JDBCClient dbClient;
+	public static JDBCAuth authProvider;
 
 	
-	private static final String SQL_CREATE_TABLE_USERS = "CREATE TABLE IF NOT EXISTS users ("
-			+ "email varchar(255) NOT NULL PRIMARY KEY, " + "username varchar(255) NOT NULL, "
+	private static final String SQL_CREATE_TABLE_USER = "CREATE TABLE IF NOT EXISTS user ("
+			+ "username varchar(255) NOT NULL PRIMARY KEY, " + "fullname varchar(255) NOT NULL, "
 			+ "password varchar(255) NOT NULL, " + "password_salt varchar(255) NOT NULL)";
 
-	private static final String SQL_CREATE_TABLE_USER_ROLES = "CREATE TABLE IF NOT EXISTS user_roles ("
-			+ "email varchar(255) NOT NULL, " + "role varchar(255) NOT NULL, " + "PRIMARY KEY (email,role))";
+	private static final String SQL_CREATE_TABLE_USER_ROLE = "CREATE TABLE IF NOT EXISTS user_role ("
+			+ "username varchar(255) NOT NULL, " + "role varchar(255) NOT NULL, " + "PRIMARY KEY (username,role))";
 
-	private static final String SQL_CREATE_TABLE_ROLE_PERMS = "CREATE TABLE IF NOT EXISTS role_perms ("
+	private static final String SQL_CREATE_TABLE_ROLE_PERM = "CREATE TABLE IF NOT EXISTS role_perm ("
 			+ "role varchar(255) NOT NULL PRIMARY KEY, " + "permission varchar(255) NOT NULL)";
 
-	private static final String SQL_ALTER_TABLE_USER_ROLES_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL = "ALTER TABLE user_roles ADD CONSTRAINT IF NOT EXISTS "
-			+ "fk_email FOREIGN KEY (email) REFERENCES users(email)";
+	private static final String SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_USERNAME = "ALTER TABLE user_role ADD CONSTRAINT IF NOT EXISTS "
+			+ "fk_username FOREIGN KEY (username) REFERENCES user(username)";
 
-	private static final String SQL_ALTER_TABLE_USER_ROLES_ADD_CONSTRAINT_FOREIGN_KEY_ROLE = "ALTER TABLE user_roles ADD CONSTRAINT IF NOT EXISTS "
-			+ "fk_role FOREIGN KEY (role) REFERENCES role_perms(role)";
+	private static final String SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE = "ALTER TABLE user_role ADD CONSTRAINT IF NOT EXISTS "
+			+ "fk_role FOREIGN KEY (role) REFERENCES role_perm(role)";
 
-	private static final String SQL_SELECT_USER_BY_EMAIL = "SELECT email FROM users WHERE email = ?";
+	private static final String SQL_SELECT_USER_BY_USERNAME = "SELECT username FROM user WHERE username = ?";
 	
-	private static final String SQL_INSERT_INTO_USER = "INSERT INTO users VALUES (?,?,?,?)";
+	private static final String SQL_INSERT_INTO_USER = "INSERT INTO user VALUES (?,?,?,?)";
 	
 	
 	
@@ -61,9 +64,9 @@ public class DatabaseVerticle extends AbstractVerticle {
 			} else {
 
 				SQLConnection connection = ar.result();
-				List<String> sqlStatements = Arrays.asList(SQL_CREATE_TABLE_USERS, SQL_CREATE_TABLE_USER_ROLES,
-						SQL_ALTER_TABLE_USER_ROLES_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL, SQL_CREATE_TABLE_ROLE_PERMS,
-						SQL_ALTER_TABLE_USER_ROLES_ADD_CONSTRAINT_FOREIGN_KEY_ROLE);
+				List<String> sqlStatements = Arrays.asList(SQL_CREATE_TABLE_USER, SQL_CREATE_TABLE_USER_ROLE,
+						SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_USERNAME, SQL_CREATE_TABLE_ROLE_PERM,
+						SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE);
 
 				connection.batch(sqlStatements, res -> {
 					connection.close();
@@ -93,7 +96,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	private void handleOperation(Message<JsonObject> message) {
 		
 		if (!message.headers().contains("db")) {
-			message.fail(DatabaseErrorCode.NO_DB_KEY_SPECIFIED.getCode(), "No db key specified in the msg header.");
+			message.fail(FailureCode.NO_DB_KEY_SPECIFIED.getCode(), "No db key specified in the msg header.");
 			return;
 		}
 
@@ -115,13 +118,13 @@ public class DatabaseVerticle extends AbstractVerticle {
 					} else {
 						SQLConnection connection = ar.result();
 						connection.updateWithParams(SQL_INSERT_INTO_USER,
-								new JsonArray().add(message.body().getString("email"))
-										.add(message.body().getString("username")).add(hash).add(salt),
+								new JsonArray().add(message.body().getString("username"))
+										.add(message.body().getString("fullname")).add(hash).add(salt),
 								res -> {
 									connection.close();
 									if (res.failed()) {
 										LOGGER.error("[USER_CREATE]Creating new user failed.", res.cause());
-										message.fail(DatabaseErrorCode.DB_ERROR.getCode(), res.cause().getMessage());
+										message.fail(FailureCode.DB_ERROR.getCode(), res.cause().getMessage());
 									} else {
 										LOGGER.info("[USER_CREATE]New user has been created.");
 									}
@@ -133,24 +136,26 @@ public class DatabaseVerticle extends AbstractVerticle {
 			
 			case USER_FIND:
 				/*
-				 * DB operation to check if a user exists identified by an email address.
+				 * DB operation to check if a user exists identified by the username.
 				 */
-				String email = message.body().getString("email");
+				String username = message.body().getString("username");
 				
 				dbClient.getConnection(ar -> {
 					if (ar.failed()) {
 						LOGGER.error("Could not open a database connection", ar.cause());
 					} else {
 						SQLConnection connection = ar.result();
-						connection.queryWithParams(SQL_SELECT_USER_BY_EMAIL, new JsonArray().add(email), query->{
+						connection.queryWithParams(SQL_SELECT_USER_BY_USERNAME, new JsonArray().add(username), query->{
 							connection.close();
 							if (query.failed()) {
-								LOGGER.error("[USER_FIND]Querying user for email " + email +" failed.", query.cause());
-								message.fail(DatabaseErrorCode.DB_ERROR.getCode(), query.cause().getMessage());
+								LOGGER.error("[USER_FIND]Querying user for username " + username +" failed.", query.cause());
+								message.fail(FailureCode.DB_ERROR.getCode(), query.cause().getMessage());
 								
 							} else {
-								LOGGER.info("[USER_FIND]OK");
+								LOGGER.debug("[USER_FIND]Query successful");
 								ResultSet resultSet = query.result();
+								LOGGER.debug("[USER_FIND]User found : " + resultSet.getNumRows());
+								
 								if(resultSet.getNumRows()!=0)
 									message.reply(new JsonObject().put("userExists", true));
 									
@@ -164,9 +169,8 @@ public class DatabaseVerticle extends AbstractVerticle {
 				break;
 			
 			default:
-				message.fail(DatabaseErrorCode.BAD_DB_OPERATION.getCode(), "Bad database operation: " + actionCode);
+				message.fail(FailureCode.BAD_DB_OPERATION.getCode(), "Bad database operation: " + actionCode);
 		}
-
 
 	}
 	

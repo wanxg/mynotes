@@ -1,0 +1,30 @@
+{{>header.hbs}}
+
+
+<style>
+div.error_container {
+	height: 30em;
+	display: flex;
+	align-items: center;
+	justify-content: center
+}
+
+</style>
+
+<div class="login_view">
+
+	<div class="error_container">
+
+		<div class="alert alert-danger" role="alert">
+			<strong>{{error_message}}</strong> <a href="/" class="alert-link">Go back</a>
+		</div>
+
+	</div>
+
+</div>
+
+<!-- Placed at the end of the document so the pages load faster -->
+<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+<script src="js/ie10-viewport-bug-workaround.js"></script>
+</body>
+</html>

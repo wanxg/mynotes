@@ -39,7 +39,8 @@ public class MainVerticle extends AbstractVerticle {
 			
 			Future<String> httpServerDeployment = Future.future();
 
-			vertx.deployVerticle("com.wanxg.mynotes.http.HttpServerVerticle", new DeploymentOptions().setInstances(4),
+			// it is possible to set for each core an instance
+			vertx.deployVerticle("com.wanxg.mynotes.http.HttpServerVerticle", new DeploymentOptions().setInstances(1),
 					httpServerDeployment.completer());
 
 			return httpServerDeployment;

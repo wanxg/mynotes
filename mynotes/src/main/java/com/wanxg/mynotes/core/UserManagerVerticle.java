@@ -1,5 +1,9 @@
 package com.wanxg.mynotes.core;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.wanxg.mynotes.FailureCode;
 import com.wanxg.mynotes.EventBusAddress;
 import com.wanxg.mynotes.database.DatabaseOperation;
 
@@ -8,8 +12,6 @@ import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 
 public class UserManagerVerticle extends AbstractVerticle {
 	
@@ -21,7 +23,6 @@ public class UserManagerVerticle extends AbstractVerticle {
 		LOGGER.info("Starting UserManagerVerticle ...");
 		
 		vertx.eventBus().consumer(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), this::distributeAction);
-		
 		startFuture.complete();
 	}
 	
@@ -29,7 +30,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 	private void distributeAction(Message<JsonObject> message){
 		
 		if(!message.headers().contains("user"))
-			message.fail(UserManagerErrorCode.NO_USER_KEY_SPECIFIED.getCode(), "No user manager key specified in the msg header.");
+			message.fail(FailureCode.NO_USER_KEY_SPECIFIED.getCode(), "No user manager key specified in the msg header.");
 		
 		
 		UserManagerAction action = UserManagerAction.valueOf(message.headers().get("user"));
@@ -39,7 +40,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 			case SIGN_UP:
 				
 				DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_FIND.toString());
-				JsonObject userExistsRequest = new JsonObject().put("email", message.body().getString("signup_email"));
+				JsonObject userExistsRequest = new JsonObject().put("username", message.body().getString("signup_email"));
 				
 				vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), userExistsRequest,options,reply->{
 					
@@ -52,8 +53,8 @@ public class UserManagerVerticle extends AbstractVerticle {
 							
 							DeliveryOptions opt = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_CREATE.toString());
 							JsonObject createUserRequest = new JsonObject()
-									.put("email", message.body().getString("signup_email"))
-									.put("username", message.body().getString("fullName"))
+									.put("username", message.body().getString("signup_email"))
+									.put("fullname", message.body().getString("full_name"))
 									.put("password", message.body().getString("signup_password"));
 							
 							
@@ -62,12 +63,12 @@ public class UserManagerVerticle extends AbstractVerticle {
 						}
 						
 						else
-							LOGGER.error("[SIGN_UP]eMail already exists");
-							message.fail(UserManagerErrorCode.EMAIL_ALREADY_EXISTS.getCode(), "Provided email already registered.");
+							LOGGER.error("[SIGN_UP]The Provided email is already registered.");
+							message.fail(FailureCode.EMAIL_ALREADY_EXISTS.getCode(), "The Provided email is already registered.");
 					}
 					
 					else
-						message.fail(UserManagerErrorCode.EVENTBUS_ERROR.getCode(), reply.cause().getMessage());
+						message.fail(FailureCode.EVENTBUS_ERROR.getCode(), reply.cause().getMessage());
 				});
 
 				
@@ -76,7 +77,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 				
 			default:
 				
-				message.fail(UserManagerErrorCode.BAD_USER_ACTION.getCode(), "Bad user action: " + action);
+				message.fail(FailureCode.BAD_USER_ACTION.getCode(), "Bad user action: " + action);
 				
 		}
 	}

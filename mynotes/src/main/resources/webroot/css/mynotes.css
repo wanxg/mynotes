@@ -6,16 +6,29 @@ body {
 
 html,
 body,
-.view {
+.login_view {
     height: 100%;
 }
 
-.view {
-    background: url("../pic/bg1.jpg") no-repeat center center fixed transparent;
+.login_view {
+    background: url("../pic/login_bg.jpg") no-repeat center center fixed transparent;
     -webkit-background-size: cover;
     -moz-background-size: cover;
     -o-background-size: cover;
     background-size: cover;
+}
+
+.home_view {
+    background: url("../pic/home_bg.jpg") no-repeat center center fixed transparent;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+    background-size: cover;
+}
+html,
+body,
+.home_view {
+    height: 100%;
 }
 
 .nav-tabs .nav-item.show .nav-link, .nav-tabs .nav-link.active {
@@ -68,12 +81,20 @@ ul.nav li a {
     margin-top: 25px;
 }
 
+.alert-dismissible .close {
+	padding: .75rem .75rem;
+}
+
+.alert-warning .alert-link {
+    color: #4275a0;
+}
+
 .thumbnail{
 	margin-left: 30px;
 }
 
 .form-signin {
-	max-width: 330px;
+	max-width: 360px;
 	padding: 15px;
 	margin: 0 auto;
 }
