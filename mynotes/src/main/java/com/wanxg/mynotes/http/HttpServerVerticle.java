@@ -128,6 +128,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 			if (isAuthenticated)
 				// ctx.reroute(HttpMethod.GET, "/");
 				doRedirect(ctx.response(), "/");
+			
 			else {
 				
 				Cookie tokenCookie = ctx.getCookie("auth_token");
@@ -145,28 +146,6 @@ public class HttpServerVerticle extends AbstractVerticle {
 					String tokenId = strings[1];
 					
 					LOGGER.debug("[handleLogin]Both cookies existing, performing automatic login with cookies.");
-					
-					/*
-					JsonObject authInfo = new JsonObject().put("user_hash", userHash).put("clear_token", clearToken).put("token_id", tokenId);
-					DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.LOG_IN_WITH_COOKIE.toString());
-					LOGGER.debug("[handleLogin]Calling user manager LOG_IN_WITH_COOKIE with auth info: " + authInfo);
-					vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), authInfo, options,
-
-							reply -> {
-								
-								if (reply.failed()) {
-									LOGGER.warn("[handleLogin]Automatic login with cookie failed with error:  " + reply.cause());
-									tokenCookie.setMaxAge(0);
-									userHashCookie.setMaxAge(0);
-									renderHandlebarsPage(ctx, "login");
-								}
-								else{
-									String result = reply.result().body().toString();
-									doRedirect(ctx.request().response(), "/");
-								}
-							}
-					);
-					*/
 					
 					JsonObject authInfo = new JsonObject().put("username", tokenId).put("password", clearToken);
 					DatabaseVerticle.authProvider.setAuthenticationQuery(DatabaseVerticle.AUTHENTICATE_QUERY_FOR_TOKEN).authenticate(authInfo, res -> {
@@ -216,7 +195,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 						
 						if(rememberMe && ctx.getCookie("auth_token")==null){
 							
-							String authToken = this.generateAuthToken();
+							String authToken = generateAuthToken();
 							
 							//sending the auth token to database
 							JsonObject rememberMeRequest = new JsonObject().put("username", email).put("auth_token", authToken);
@@ -230,6 +209,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 										if (reply.failed()) {
 											
 											LOGGER.warn("[handleLogin]Remember me request failed with error:  " + reply.cause());
+											LOGGER.warn("[handleLogin]Token will not be generated.");
 											doRedirect(ctx.request().response(), "/");
 										}
 										
@@ -241,9 +221,11 @@ public class HttpServerVerticle extends AbstractVerticle {
 											String tokenId = result.getString("token_id");
 											
 											LOGGER.info("[handleLogin]Remember me request successful, returned user hash: " + userHash);
+											LOGGER.info("[handleLogin]returned token id: " + tokenId);
+											
 											LOGGER.debug("[handleLogin]Creating cookies");
 											
-											//creating cookies
+											//creating cookie
 											ctx.addCookie(Cookie.cookie("auth_token",authToken+"_"+tokenId).setMaxAge(COOKIE_MAX_AGE));
 											LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("auth_token").getName() +":"+ctx.getCookie("auth_token").getValue()+"}");
 											
@@ -256,12 +238,10 @@ public class HttpServerVerticle extends AbstractVerticle {
 										}
 									}
 							);
-						}
 						
-						else
+						} else
 							doRedirect(ctx.request().response(), "/");
-						
-						
+					
 					} else {
 						ctx.fail(403); // Failed login
 					}
@@ -441,7 +421,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 *  Generate authentication token for cookie 
 	 */
 	
-	private String generateAuthToken(){
+	public static String generateAuthToken(){
 		SecureRandom random = new SecureRandom();
 		return new BigInteger(130, random).toString(32);
 	}

@@ -16,10 +16,6 @@
 		<main.verticle>com.wanxg.mynotes.MainVerticle</main.verticle>
 	</properties>
 
-
-
-
-
 	<dependencies>
 		<!-- https://mvnrepository.com/artifact/io.vertx/vertx-core -->
 		<dependency>
@@ -68,6 +64,13 @@
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>io.vertx</groupId>
+			<artifactId>vertx-unit</artifactId>
+			<version>${vertx.version}</version>
 			<scope>test</scope>
 		</dependency>
 
