@@ -4,8 +4,8 @@ package com.wanxg.mynotes.core;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.wanxg.mynotes.EventBusAddress;
 import com.wanxg.mynotes.database.DatabaseOperation;
+import com.wanxg.mynotes.util.EventBusAddress;
 import com.wanxg.mynotes.util.FailureCode;
 import com.wanxg.mynotes.util.WarningCode;
 
@@ -112,7 +112,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 			}
 			
 			else
-				message.fail(FailureCode.EVENTBUS_ERROR.getCode(), reply.cause().getMessage());
+				message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
 		});
 	}
 	
@@ -138,21 +138,21 @@ public class UserManagerVerticle extends AbstractVerticle {
 			if(reply.succeeded()){
 				
 				String returnedTokenId = reply.result().body().toString();
-				LOGGER.debug("[LOG_IN_REMEMBER_ME]Token has been created and stored. Retrieving user hash.");
+				LOGGER.debug("[LOG_IN_REMEMBER_ME]Token has been created and stored. Retrieving user.");
 				DeliveryOptions opt = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_SELECT_BY_USERNAME.toString());
 				JsonObject userSelectReq = new JsonObject().put("username", username);
 				
 				vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), userSelectReq,opt,query->{
 					
 					if(query.succeeded()){
-						JsonObject body = (JsonObject)query.result().body();
-						String uId = body.getString("USER_ID");
-						LOGGER.debug("[LOG_IN_REMEMBER_ME]User hash has been retrieved : " + uId);
-						message.reply(new JsonObject().put("user_hash", uId).put("token_id", returnedTokenId));
+						JsonObject user = (JsonObject)query.result().body();
+						String uId = user.getString("USER_ID");
+						LOGGER.debug("[LOG_IN_REMEMBER_ME]User has been retrieved : " + uId);
+						message.reply(new JsonObject().put("user", user).put("token_id", returnedTokenId));
 					}
 					
 					else
-						message.fail(FailureCode.EVENTBUS_ERROR.getCode(), reply.cause().getMessage());
+						message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
 					
 				});
 			}
@@ -170,20 +170,19 @@ public class UserManagerVerticle extends AbstractVerticle {
 	
 	private void findUser(Message<JsonObject> message){
 		
-		
 		String username,userId;
 		
 		DeliveryOptions options;
 		
 		JsonObject findUserRequest = new JsonObject();
 		
-		if("username".equals(message.body().getString("by"))){
+		if(message.body().getString("username")!=null){
 			username = message.body().getString("username");
 			options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_SELECT_BY_USERNAME.toString());
 			findUserRequest.put("username", username);
 		}
 		
-		else if("user_id".equals(message.body().getString("by"))){
+		else if(message.body().getString("user_id")!=null){
 			userId = message.body().getString("user_id");
 			options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_SELECT_BY_USERID.toString());
 			findUserRequest.put("user_id", userId);
@@ -200,15 +199,18 @@ public class UserManagerVerticle extends AbstractVerticle {
 				
 				JsonObject user = (JsonObject)reply.result().body();
 				boolean userFound = !user.isEmpty();
-				LOGGER.debug("[FIND_USER]User found? " + userFound);
+				LOGGER.info("[FIND_USER]User found? " + userFound);
 				
-				System.out.println(user);
+				if(userFound)
+					message.reply(user);
+				else
+					message.reply(new JsonObject());
 				
 			}
 			
 			else{
 				LOGGER.error("[FIND_USER]Finding user failed : " + reply.cause());
-				message.fail(FailureCode.EVENTBUS_ERROR.getCode(), reply.cause().getMessage());
+				message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
 			}
 		});
 	}

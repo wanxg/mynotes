@@ -7,7 +7,7 @@ import org.apache.commons.lang3.mutable.MutableInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.wanxg.mynotes.EventBusAddress;
+import com.wanxg.mynotes.util.EventBusAddress;
 import com.wanxg.mynotes.util.FailureCode;
 import com.wanxg.mynotes.util.WarningCode;
 
@@ -83,12 +83,12 @@ public class DatabaseVerticle extends AbstractVerticle {
 	
 	private static final String SQL_INSERT_INTO_AUTH_TOKEN = "INSERT INTO auth_token (id,username,token,token_salt) VALUES (?,?,?,?)";
 	
-	private static final String SQL_UPDATE_AUTH_TOKEN_SET_INVALID = "UPDATE auth_token SET DELETED = 1 WHERE id = ?";
+	private static final String SQL_UPDATE_AUTH_TOKEN_SET_INVALID = "UPDATE auth_token SET deleted = 1 WHERE id = ?";
 	
 	public static final String SQL_SELECT_AUTH_TOKEN_BY_USER_ID_AND_TOKEN_ID = 
 			"SELECT token, token_salt FROM auth_token LEFT JOIN user ON auth_token.username = user.username WHERE user.user_id = ? AND auth_token.id = ?";
 	
-	public static final String AUTHENTICATE_QUERY_FOR_TOKEN = "SELECT token, token_salt FROM auth_token WHERE id = ?";
+	public static final String AUTHENTICATE_QUERY_FOR_TOKEN = "SELECT token, token_salt FROM auth_token WHERE id = ? AND deleted = 0";
 	
 	@Override
 	public void start(Future<Void> startFuture) throws Exception {
@@ -301,8 +301,10 @@ public class DatabaseVerticle extends AbstractVerticle {
 							message.reply(resultSet.getRows().get(0));
 						}
 
-						else
+						else{
+							LOGGER.info("[USER_SELECT_BY_USERNAME]User not found.");
 							message.reply(new JsonObject());
+						}
 					}
 				});
 			}
@@ -341,8 +343,10 @@ public class DatabaseVerticle extends AbstractVerticle {
 							message.reply(resultSet.getRows().get(0));
 						}
 
-						else
+						else{
+							LOGGER.info("[USER_SELECT_BY_USEID]User not found.");
 							message.reply(new JsonObject());
+						}
 					}
 				});
 			}

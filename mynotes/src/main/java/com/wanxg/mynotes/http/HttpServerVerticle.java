@@ -6,9 +6,10 @@ import java.security.SecureRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.wanxg.mynotes.EventBusAddress;
 import com.wanxg.mynotes.core.UserManagerAction;
+import com.wanxg.mynotes.database.DatabaseOperation;
 import com.wanxg.mynotes.database.DatabaseVerticle;
+import com.wanxg.mynotes.util.EventBusAddress;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
@@ -41,7 +42,6 @@ public class HttpServerVerticle extends AbstractVerticle {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServerVerticle.class);
 	private static final long COOKIE_MAX_AGE = 60*60*24*7;
 	
-	
 	private final TemplateEngine engine = HandlebarsTemplateEngine.create();
 
 	@Override
@@ -53,43 +53,25 @@ public class HttpServerVerticle extends AbstractVerticle {
 		router.route().handler(BodyHandler.create());
 		router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
 
-		// A user session handler, so that the user is stored in the session
-		// between requests
+		// A user session handler, so that the user is stored in the session between requests
 		router.route().handler(UserSessionHandler.create(DatabaseVerticle.authProvider));
 
-		// An auth handler that redirect to login page if user is not stored in
-		// the session
+		// An auth handler that redirect to login page if user is not stored in the session
 		AuthHandler authHandler = RedirectAuthHandler.create(DatabaseVerticle.authProvider, "/login");
 
 		router.route("/").handler(authHandler);
 
-		// handle login post, if user is authenticated, direct to root / home
-		// page
-		// router.post("/login").handler(FormLoginHandler.create(DatabaseVerticle.authProvider).setPasswordParam("login_password")
-		// .setUsernameParam("login_email").setDirectLoggedInOKURL("/"));
-
+		// handle log in
 		router.route("/login").handler(this::handleLogin);
 
 		// handle sign up
 		router.post("/signup").handler(this::handleSignUp);
 
-		// handle logout, clear the authentication and direct to login page
+		// handle logout, clear the authentication and cookies and direct to login page
 		router.route("/logout").handler(this::handleLogout);
 
 		// handle home page after login
 		router.get("/").handler(this::handleHomePage);
-
-		// A route for user information
-		router.get("/user/").handler(ctx -> {
-
-			String fullName = ctx.request().getParam("fullName");
-			String eMail = ctx.request().getParam("eMail");
-			System.out.println("Full name: " + fullName + ", eMail: " + eMail);
-
-		});
-
-		// route for handlebars templates
-		// router.get("/templates/*").handler(handler);
 
 		// route for static resources
 		router.route().handler(StaticHandler.create().setCachingEnabled(false));
@@ -126,7 +108,6 @@ public class HttpServerVerticle extends AbstractVerticle {
 			boolean isAuthenticated = ctx.user() != null;
 
 			if (isAuthenticated)
-				// ctx.reroute(HttpMethod.GET, "/");
 				doRedirect(ctx.response(), "/");
 			
 			else {
@@ -152,13 +133,17 @@ public class HttpServerVerticle extends AbstractVerticle {
 						if (res.succeeded()) {
 							// user authenticated
 							User user = res.result();
-							LOGGER.debug("[handleLogin]Automatic login with cookies successful.");
-							LOGGER.debug("[handleLogin]AutomUser principal: " + user.principal());
+							LOGGER.info("[handleLogin]Automatic login with cookies successful.");
+							LOGGER.debug("[handleLogin]User principal: " + user.principal());
 							ctx.setUser(user);
+							ctx.session().put("user_id", userHash);
 							doRedirect(ctx.request().response(), "/");
+							
 						}
 						else{
-							LOGGER.debug("[handleLogin]Automatic login with cookies failed. Removing cookies");
+							LOGGER.info("[handleLogin]Automatic login with cookies failed. Removing cookies");
+							// we have to delete the cookies from browser and delete the token from db
+							deleteToken(tokenId);
 							tokenCookie.setMaxAge(0);
 							userHashCookie.setMaxAge(0);
 							renderHandlebarsPage(ctx, "login");
@@ -217,11 +202,13 @@ public class HttpServerVerticle extends AbstractVerticle {
 											
 											JsonObject result = (JsonObject)reply.result().body();
 											
-											String userHash = result.getString("user_hash");
+											JsonObject returnedUser = result.getJsonObject("user");
+											
 											String tokenId = result.getString("token_id");
 											
-											LOGGER.info("[handleLogin]Remember me request successful, returned user hash: " + userHash);
-											LOGGER.info("[handleLogin]returned token id: " + tokenId);
+											LOGGER.info("[handleLogin]Remember me request successful.");
+											LOGGER.debug("[handleLogin]Returned user: " + returnedUser);
+											LOGGER.debug("[handleLogin]Returned token id: " + tokenId);
 											
 											LOGGER.debug("[handleLogin]Creating cookies");
 											
@@ -229,18 +216,23 @@ public class HttpServerVerticle extends AbstractVerticle {
 											ctx.addCookie(Cookie.cookie("auth_token",authToken+"_"+tokenId).setMaxAge(COOKIE_MAX_AGE));
 											LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("auth_token").getName() +":"+ctx.getCookie("auth_token").getValue()+"}");
 											
-											ctx.addCookie(Cookie.cookie("user_hash", userHash).setMaxAge(COOKIE_MAX_AGE));
+											ctx.addCookie(Cookie.cookie("user_hash", returnedUser.getString("USER_ID")).setMaxAge(COOKIE_MAX_AGE));
 											LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("user_hash").getName() +":"+ctx.getCookie("user_hash").getValue()+"}");
 										
-											LOGGER.info("[handleLogin]Token has bee stored, cookies are created. User login has been remembered.");
+											LOGGER.info("[handleLogin]Token has bee stored, cookies are created. User login has been remembered. Setting user into session.");
+											
+											ctx.session().put("user", returnedUser);
 											
 											doRedirect(ctx.request().response(), "/");
 										}
 									}
 							);
 						
-						} else
+						} else {
+							// login without remember me
+							ctx.session().put("email", email);
 							doRedirect(ctx.request().response(), "/");
+						}
 					
 					} else {
 						ctx.fail(403); // Failed login
@@ -318,11 +310,14 @@ public class HttpServerVerticle extends AbstractVerticle {
 			userCookie.setMaxAge(0);
 		}
 		
-		Cookie authCookie = ctx.getCookie("auth_token");
+		Cookie tokenCookie = ctx.getCookie("auth_token");
 		
-		if(authCookie!=null){
-			LOGGER.debug("Cookie:" + authCookie);
-			authCookie.setMaxAge(0);
+		if(tokenCookie!=null){
+			LOGGER.debug("Cookie:" + tokenCookie);
+			String[] strings = tokenCookie.getValue().split("_",2);
+			String tokenId = strings[1];
+			deleteToken(tokenId);
+			tokenCookie.setMaxAge(0);
 		}
 		
 		ctx.clearUser();
@@ -339,13 +334,61 @@ public class HttpServerVerticle extends AbstractVerticle {
 	private void handleHomePage(RoutingContext ctx) {
 		LOGGER.debug("requesting home page /");
 
-		User user = ctx.user();
-		LOGGER.debug("user: " + user);
+		LOGGER.debug("auth user with principal: " + ctx.user().principal());
+		
 
-		//ctx.put("username", user.principal().getValue("username"));
+		JsonObject sessionUser = ctx.session().get("user");
+				
+		LOGGER.debug("session user : " + sessionUser );
+		
+		// Check if user is stored in session. If not, retrieve user from db
+		if(sessionUser==null || sessionUser.isEmpty() ){
+			
+			JsonObject findUserRequest = new JsonObject();
+			
+			if(ctx.session().get("user_id")!=null)
+				findUserRequest.put("user_id", (String)ctx.session().get("user_id"));
+			else if(ctx.session().get("email")!=null)
+				findUserRequest.put("username", (String)ctx.session().get("email"));
+			else{ 
+				ctx.fail(403);
+				return;
+			}
+			
+			DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.FIND_USER.toString());
+			LOGGER.info("[handleHomePage]Calling user manager FIND_USER with findUserRequest: " + findUserRequest);
+			vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), findUserRequest, options, reply -> {
+	
+				if (reply.failed()) {
+					LOGGER.error("[handleHomePage]Finding user failed with error:  " + reply.cause());
+					ctx.fail(((ReplyException)reply.cause()).failureCode());
+				} 
+				else {
+					JsonObject user = (JsonObject)reply.result().body();
+					if(user.isEmpty()){
+						
+						//It means, user is authenticated with login data or cookie, but user is not found in db.  
+						//TODO how to handle this scenario?
+						renderHandlebarsPage(ctx, "login");
+					}
+					
+					else{
+						LOGGER.info("[handleHomePage]Adding user into session");
+						ctx.session().put("user",user);
+						ctx.put("fullname", user.getString("FULLNAME"));
+						ctx.put("page_title", "My Notes - Home");	
+						renderHandlebarsPage(ctx, "home");
+					}
+				}
+			});
+		}
+		
+		else {
 
-		ctx.put("page_title", "My Notes - Home");
-		renderHandlebarsPage(ctx, "home");
+			ctx.put("fullname", sessionUser.getString("FULLNAME"));
+			ctx.put("page_title", "My Notes - Home");	
+			renderHandlebarsPage(ctx, "home");
+		}
 	}
 
 	/**
@@ -414,6 +457,27 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 */
 	private void doRedirect(HttpServerResponse response, String url) {
 		response.putHeader("location", url).setStatusCode(302).end();
+	}
+	
+	
+	/**
+	 *  to delete the token with id
+	 * 
+	 */
+	
+	private void deleteToken(String tokenId){
+
+		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_DELETE.toString());
+		JsonObject deleteTokenRequest = new JsonObject().put("token_id", tokenId);
+		vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), deleteTokenRequest, options, reply -> {
+			
+			if (reply.succeeded()) {
+				LOGGER.info(reply.result().body().toString());
+			}
+			else {
+				LOGGER.info("Deleting token failed : " + reply.cause());
+			}
+		});
 	}
 	
 	

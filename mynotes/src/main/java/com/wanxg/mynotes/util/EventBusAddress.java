@@ -1,4 +1,4 @@
-package com.wanxg.mynotes;
+package com.wanxg.mynotes.util;
 
 public enum EventBusAddress {
 	

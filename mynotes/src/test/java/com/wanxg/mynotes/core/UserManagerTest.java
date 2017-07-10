@@ -7,13 +7,14 @@ import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.wanxg.mynotes.EventBusAddress;
 import com.wanxg.mynotes.database.DatabaseVerticle;
 import com.wanxg.mynotes.http.HttpServerVerticle;
+import com.wanxg.mynotes.util.EventBusAddress;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
@@ -123,10 +124,10 @@ public class UserManagerTest {
 					else {
 						
 						JsonObject result = (JsonObject)reply.result().body();
-						String userHash = result.getString("user_hash");
+						JsonObject user = result.getJsonObject("user");
 						String tokenId = result.getString("token_id");
 						
-						LOGGER.info("[testLoginRememberMe]Remember me request successful, returned user hash: " + userHash);
+						LOGGER.info("[testLoginRememberMe]Remember me request successful, returned user: " + user);
 						LOGGER.info("[testLoginRememberMe]returned token id: " + tokenId);
 
 					}
@@ -134,6 +135,43 @@ public class UserManagerTest {
 				});
 		
 		async.await();
+	}
+	
+	
+	@Test
+	public void testFindUser(TestContext context) {
+		
+		String email = "wanxiaolong@gmail.com";
+		String userHash = "A80C4B9D329E5D62CF8F870CFFB220C461E732A17C13FA6D6A590BD259035494D93A4628423F36F48200F8561670EAD0E86AC279884C4895CD7ED4F0057325A4";
+		
+		JsonObject findUserRequest = new JsonObject().put("username", email);
+		//JsonObject findUserRequest = new JsonObject().put("user_id", userHash);
+		DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.FIND_USER.toString());
+		
+		LOGGER.info("[testFindUser]Calling user manager FIND_USER with findUserRequest: " + findUserRequest);
+		
+		Async async = context.async();
+		
+		vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), findUserRequest, options, reply -> {
+
+			async.complete();
+					
+			if (reply.failed()) {
+						
+				LOGGER.error("[testFindUser]Finding user failed with error:  " + reply.cause());
+				ReplyException re = (ReplyException)reply.cause();
+				LOGGER.info(""+re.failureCode());
+						
+			} 
+			else {
+				JsonObject user = (JsonObject)reply.result().body();
+				LOGGER.info("[testFindUser]User found: " + user);
+			}
+
+		});
+		
+		async.await();
+		
 	}
 	
 	

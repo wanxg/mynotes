@@ -1,1 +1,8 @@
 java -cp D:/hsqldb-2.3.4/hsqldb/lib/hsqldb.jar org.hsqldb.Server -database.0 file:mynotesdb -dbname.0 xdb
+
+
+Todo:
+
+1. how to handle the scenario that the cookie are expired and the related token is to be deleted.
+
+2. user role management, admin to manage the user

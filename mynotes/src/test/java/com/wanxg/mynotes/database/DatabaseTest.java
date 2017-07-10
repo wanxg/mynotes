@@ -7,8 +7,8 @@ import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.wanxg.mynotes.EventBusAddress;
 import com.wanxg.mynotes.http.HttpServerVerticle;
+import com.wanxg.mynotes.util.EventBusAddress;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.DeliveryOptions;
