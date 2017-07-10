@@ -3,6 +3,8 @@ java -cp D:/hsqldb-2.3.4/hsqldb/lib/hsqldb.jar org.hsqldb.Server -database.0 fil
 
 Todo:
 
-1. how to handle the scenario that the cookie are expired and the related token is to be deleted.
+1. how to handle the scenario that the cookies are expired and the related token is to be deleted.
 
 2. user role management, admin to manage the user
+
+3. re-issue a token after every auto-login
