@@ -280,8 +280,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 							if (res.succeeded()) {
 								User user = res.result();
 								ctx.setUser(user);
-								ctx.put("full_name", ctx.request().getParam("full_name"));
-								// ctx.reroute(HttpMethod.GET, "/");
+								ctx.session().put("email", user.principal().getString("username"));
 								ctx.response().putHeader("location", "/").setStatusCode(303).end();
 
 							} else {
@@ -350,7 +349,8 @@ public class HttpServerVerticle extends AbstractVerticle {
 				findUserRequest.put("user_id", (String)ctx.session().get("user_id"));
 			else if(ctx.session().get("email")!=null)
 				findUserRequest.put("username", (String)ctx.session().get("email"));
-			else{ 
+			else{
+				LOGGER.error("no user key is found in the session for retrieving db from db.");
 				ctx.fail(403);
 				return;
 			}
