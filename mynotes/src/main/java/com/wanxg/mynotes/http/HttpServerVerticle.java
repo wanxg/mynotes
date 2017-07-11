@@ -138,6 +138,8 @@ public class HttpServerVerticle extends AbstractVerticle {
 							LOGGER.debug("[handleLogin]User principal: " + user.principal());
 							ctx.setUser(user);
 							ctx.session().put("user_id", userHash);
+							
+							//TODO : Reissue a new auth token and delete the old one 
 							doRedirect(ctx.request().response(), "/");
 							
 						}
@@ -180,6 +182,8 @@ public class HttpServerVerticle extends AbstractVerticle {
 						ctx.setUser(user);
 						
 						if(rememberMe && ctx.getCookie("auth_token")==null){
+							
+							// login with remember me checked
 							
 							String clearToken = generateAuthToken();
 							
@@ -466,7 +470,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 	
 	
 	/**
-	 *  to delete the token with id
+	 *  to delete the token from db
 	 * 
 	 */
 	
@@ -483,8 +487,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 				LOGGER.info("Deleting token failed : " + reply.cause());
 			}
 		});
-	}
-	
+	}	
 	
 	/**
 	 *  Generate authentication token for cookie 

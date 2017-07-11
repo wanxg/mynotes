@@ -4,4 +4,5 @@ public enum UserManagerAction {
 	LOG_IN_REMEMBER_ME,
 	SIGN_UP,
 	FIND_USER,
+	REISSUE_AUTH_TOKEN,
 }

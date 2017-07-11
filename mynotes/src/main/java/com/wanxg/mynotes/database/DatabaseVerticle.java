@@ -184,7 +184,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	}
 
 	/**
-	 * DB operation to create a new user
+	 * DB operation to create a new user, reply an information message
 	 * 
 	 * @param message
 	 */
@@ -233,7 +233,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	
 	
 	/**
-	 *  DB operation to make a user inactive
+	 *  DB operation to make a user inactive, reply an information message
 	 *  @param message
 	 */
 	private void updateUserActiveness(Message<JsonObject> message) {
@@ -271,7 +271,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	}
 
 	/**
-	 * DB operation to find a user by user name
+	 * DB operation to find a user by user name, reply a user json object which can be empty if the user is not found
 	 * 
 	 * @param message
 	 */
@@ -313,7 +313,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	}
 
 	/**
-	 * DB operation to find a user by user id
+	 * DB operation to find a user by user id, reply a user json object which can be empty if the user is not found
 	 * 
 	 * @param message
 	 */
@@ -356,7 +356,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	}
 
 	/**
-	 * DB operation to create a new authentication token for login with cookie.
+	 * DB operation to create a new authentication token for login with cookie, reply the id of the created token
 	 * 
 	 * @param message
 	 */
@@ -417,7 +417,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	}
 
 	/**
-	 * DB operation to delete a token.
+	 * DB operation to delete a token, reply an information message
 	 * 
 	 * @param message
 	 */
