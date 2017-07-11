@@ -126,10 +126,11 @@ public class UserManagerVerticle extends AbstractVerticle {
 		
 		String username = message.body().getString("username");
 		String clearToken = message.body().getString("auth_token");
+		Long validTo = message.body().getLong("valid_to");
 		
 		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_CREATE.toString());
 		JsonObject createTokenRequest = new JsonObject();
-		createTokenRequest.put("username", username).put("auth_token", clearToken);
+		createTokenRequest.put("username", username).put("auth_token", clearToken).put("valid_to", validTo);
 		
 		LOGGER.debug("[LOG_IN_REMEMBER_ME]Creating token with tokenRequest: " + createTokenRequest);
 		

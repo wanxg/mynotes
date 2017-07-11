@@ -5,6 +5,11 @@ Todo:
 
 1. how to handle the scenario that the cookies are expired and the related token is to be deleted.
 
+-> now, token and cookie have the same expiry date. when the auto-login with cookie fails due to expired token in the db, the token will be set to deleted and the cookie will be removed.
+
+Remaining point is how to delete token if the cookie gets expired ???
+
+
 2. user role management, admin to manage the user
 
 3. re-issue a token after every auto-login

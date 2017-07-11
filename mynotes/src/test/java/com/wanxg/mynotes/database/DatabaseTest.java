@@ -1,5 +1,7 @@
 package com.wanxg.mynotes.database;
 
+import java.util.Date;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,6 +25,9 @@ public class DatabaseTest {
 
 	private Vertx vertx;
 	private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseTest.class);
+	private static final long COOKIE_MAX_AGE = 60*60*24*1;
+	
+	
 	@Before
 	public void prepare(TestContext context) throws InterruptedException {
 
@@ -149,12 +154,21 @@ public class DatabaseTest {
 	public void testCreateToken(TestContext context) {
 
 		String token = HttpServerVerticle.generateAuthToken();
-		String username = "eon.wang@gmail.com";
+		String username = "wanxiaolong@gmail.com";
 
+		long validTo = new Date().getTime()+COOKIE_MAX_AGE*1000;
+		
+		
+		java.sql.Timestamp time = new java.sql.Timestamp(validTo);
+		
+		LOGGER.info(time.toString());
+		
 		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_CREATE.toString());
 
 		JsonObject createTokenRequest = new JsonObject()
-				.put("username", username).put("auth_token", token);
+											.put("username", username)
+											.put("auth_token", token)
+											.put("valid_to", validTo );;
 		
 		Async async = context.async();
 		

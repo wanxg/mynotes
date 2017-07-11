@@ -2,6 +2,7 @@ package com.wanxg.mynotes.http;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.Date;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ import io.vertx.ext.web.templ.TemplateEngine;
 public class HttpServerVerticle extends AbstractVerticle {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServerVerticle.class);
-	private static final long COOKIE_MAX_AGE = 60*60*24*7;
+	private static final long COOKIE_MAX_AGE = 60*60*24*1;
 	
 	private final TemplateEngine engine = HandlebarsTemplateEngine.create();
 
@@ -180,10 +181,14 @@ public class HttpServerVerticle extends AbstractVerticle {
 						
 						if(rememberMe && ctx.getCookie("auth_token")==null){
 							
-							String authToken = generateAuthToken();
+							String clearToken = generateAuthToken();
 							
 							//sending the auth token to database
-							JsonObject rememberMeRequest = new JsonObject().put("username", email).put("auth_token", authToken);
+							JsonObject rememberMeRequest = new JsonObject()
+																.put("username", email)
+																.put("auth_token", clearToken)
+																.put("valid_to", new Date().getTime()+COOKIE_MAX_AGE*1000);
+							
 							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.LOG_IN_REMEMBER_ME.toString());
 							LOGGER.debug("[handleLogin]Calling user manager LOG_IN_REMEMBER_ME with rememberMeRequest: " + rememberMeRequest);
 							
@@ -213,7 +218,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 											LOGGER.debug("[handleLogin]Creating cookies");
 											
 											//creating cookie
-											ctx.addCookie(Cookie.cookie("auth_token",authToken+"_"+tokenId).setMaxAge(COOKIE_MAX_AGE));
+											ctx.addCookie(Cookie.cookie("auth_token",clearToken+"_"+tokenId).setMaxAge(COOKIE_MAX_AGE));
 											LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("auth_token").getName() +":"+ctx.getCookie("auth_token").getValue()+"}");
 											
 											ctx.addCookie(Cookie.cookie("user_hash", returnedUser.getString("USER_ID")).setMaxAge(COOKIE_MAX_AGE));

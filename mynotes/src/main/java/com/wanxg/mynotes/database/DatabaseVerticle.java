@@ -45,7 +45,8 @@ public class DatabaseVerticle extends AbstractVerticle {
 			+ "username VARCHAR(255) NOT NULL, "
 			+ "token VARCHAR(255) NOT NULL, "
 			+ "token_salt VARCHAR(255) NOT NULL, "
-			+ "creation TIMESTAMP(0) DEFAULT NOW , "
+			+ "creation TIMESTAMP(0) DEFAULT NOW NOT NULL, "
+			+ "valid_to TIMESTAMP(0) NOT NULL, "
 			+ "deleted INTEGER DEFAULT 0 NOT NULL, "
 			+ "PRIMARY KEY (username,token))";
 	
@@ -81,14 +82,14 @@ public class DatabaseVerticle extends AbstractVerticle {
 	
 	private static final String SQL_SELECT_MAX_TOKEN_ID = "SELECT max(id) FROM auth_token";
 	
-	private static final String SQL_INSERT_INTO_AUTH_TOKEN = "INSERT INTO auth_token (id,username,token,token_salt) VALUES (?,?,?,?)";
+	private static final String SQL_INSERT_INTO_AUTH_TOKEN = "INSERT INTO auth_token (id,username,token,token_salt,valid_to) VALUES (?,?,?,?, TO_TIMESTAMP(?, 'YYYY-MM-DD HH:MI:SS' ))";
 	
 	private static final String SQL_UPDATE_AUTH_TOKEN_SET_INVALID = "UPDATE auth_token SET deleted = 1 WHERE id = ?";
 	
 	public static final String SQL_SELECT_AUTH_TOKEN_BY_USER_ID_AND_TOKEN_ID = 
 			"SELECT token, token_salt FROM auth_token LEFT JOIN user ON auth_token.username = user.username WHERE user.user_id = ? AND auth_token.id = ?";
 	
-	public static final String AUTHENTICATE_QUERY_FOR_TOKEN = "SELECT token, token_salt FROM auth_token WHERE id = ? AND deleted = 0";
+	public static final String AUTHENTICATE_QUERY_FOR_TOKEN = "SELECT token, token_salt FROM auth_token WHERE id = ? AND deleted = 0 AND valid_to >= NOW()";
 	
 	@Override
 	public void start(Future<Void> startFuture) throws Exception {
@@ -362,6 +363,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	private void createAuthToken(Message<JsonObject> message) {
 		String username = message.body().getString("username");
 		String token = message.body().getString("auth_token");
+		Long validTo = message.body().getLong("valid_to");
 
 		String salt = authProvider.generateSalt();
 		String hash = authProvider.computeHash(token, salt);
@@ -386,7 +388,8 @@ public class DatabaseVerticle extends AbstractVerticle {
 																				.add(String.valueOf(maxTokenId.getValue() + 1))
 																				.add(username)
 																				.add(hash)
-																				.add(salt),
+																				.add(salt)
+																				.add(new java.sql.Timestamp(validTo).toString()),
 							create -> {
 								connection.close();
 								if (create.failed()) {
