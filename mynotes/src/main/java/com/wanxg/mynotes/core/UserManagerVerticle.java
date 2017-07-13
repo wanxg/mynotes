@@ -30,7 +30,11 @@ public class UserManagerVerticle extends AbstractVerticle {
 		startFuture.complete();
 	}
 	
-	
+	/**
+	 * A user action distributor distributing user actions based on the UserManagerAction provided in the header.
+	 * 
+	 * @param message
+	 */
 	private void distributeAction(Message<JsonObject> message){
 		
 		if(!message.headers().contains("user"))
@@ -66,13 +70,22 @@ public class UserManagerVerticle extends AbstractVerticle {
 	
 	/**
 	 * 
-	 *  User action to sign up
+	 * User action to sign up
+	 * @param message
 	 */
 	
 	private void signUp(Message<JsonObject> message){
 		
+		String email = message.body().getString("signup_email");
+		String fullname = message.body().getString("full_name");
+		String password = message.body().getString("signup_password");
 		
-		JsonObject findUserRequest = new JsonObject().put("username", message.body().getString("signup_email"));
+		if(email==null || fullname==null || password==null){
+			message.fail(FailureCode.ILLEGAL_ARGUMENT.getCode(), "Illegal argument.");
+			return;
+		}
+		
+		JsonObject findUserRequest = new JsonObject().put("username", email);
 		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_SELECT_BY_USERNAME.toString());
 		
 		vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), findUserRequest,options,reply->{
@@ -87,9 +100,9 @@ public class UserManagerVerticle extends AbstractVerticle {
 					
 					DeliveryOptions opt = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_CREATE.toString());
 					JsonObject createUserRequest = new JsonObject()
-							.put("username", message.body().getString("signup_email"))
-							.put("fullname", message.body().getString("full_name"))
-							.put("password", message.body().getString("signup_password"));
+							.put("username", email)
+							.put("fullname", fullname)
+							.put("password", password);
 					
 					
 					vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserRequest, opt, creationReply->{
@@ -118,8 +131,9 @@ public class UserManagerVerticle extends AbstractVerticle {
 	
 	
 	/**
+	 * User action to log in with remember me option checked
 	 * 
-	 *  User action to find user
+	 * @param message
 	 */
 	
 	private void loginWithRememberMe(Message<JsonObject> message){
@@ -127,6 +141,11 @@ public class UserManagerVerticle extends AbstractVerticle {
 		String username = message.body().getString("username");
 		String clearToken = message.body().getString("auth_token");
 		Long validTo = message.body().getLong("valid_to");
+		
+		if(username==null || clearToken==null || validTo==null){
+			message.fail(FailureCode.ILLEGAL_ARGUMENT.getCode(), "Illegal argument.");
+			return;
+		}
 		
 		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_CREATE.toString());
 		JsonObject createTokenRequest = new JsonObject();
@@ -165,8 +184,8 @@ public class UserManagerVerticle extends AbstractVerticle {
 	}
 	
 	/**
-	 * 
-	 *  User action to find user
+	 * User action to find user
+	 * @param message
 	 */
 	
 	private void findUser(Message<JsonObject> message){
@@ -214,6 +233,52 @@ public class UserManagerVerticle extends AbstractVerticle {
 				message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
 			}
 		});
+	}
+	
+	/**
+	 *  User action to manage token, the sub-action defining the operation is provided in the header.
+	 * 
+	 * @param message
+	 */
+	
+	private void manageToken(Message<JsonObject> message){
+		
+		UserManagerAction subAction = UserManagerAction.valueOf(message.headers().get("sub_action"));
+		
+		
+		switch (subAction) {
+		
+			case DELETE_TOKEN:
+				
+				String tokenId = message.body().getString("token_id");
+				DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_DELETE.toString());
+				JsonObject deleteTokenRequest = new JsonObject().put("token_id", tokenId);
+				vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), deleteTokenRequest, options, reply -> {
+					
+					if (reply.succeeded()) {
+						LOGGER.info(reply.result().body().toString());
+					}
+					else {
+						LOGGER.info("Deleting token failed : " + reply.cause());
+					}
+				});
+				
+				break;
+				
+			case REISSUE_TOKEN:
+				
+				break;
+			
+			
+			default:
+				message.fail(FailureCode.BAD_USER_SUB_ACTION.getCode(), "Bad user sub action: " + subAction);
+				
+			
+		}
+		
+		
+		
+		
 	}
 
 }
