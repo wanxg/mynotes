@@ -8,13 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.wanxg.mynotes.core.UserManagerAction;
-import com.wanxg.mynotes.database.DatabaseOperation;
 import com.wanxg.mynotes.database.DatabaseVerticle;
 import com.wanxg.mynotes.util.EventBusAddress;
 
+import co.paralleluniverse.fibers.Suspendable;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerOptions;
@@ -23,6 +24,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
 import io.vertx.ext.auth.User;
 import io.vertx.ext.auth.jdbc.JDBCAuth;
+import io.vertx.ext.sync.Sync;
 import io.vertx.ext.web.Cookie;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -100,7 +102,6 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 * Handle log in
 	 * 
 	 */
-
 	private void handleLogin(RoutingContext ctx) {
 
 		if (ctx.request().method().equals(HttpMethod.GET)) {
@@ -130,7 +131,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 					LOGGER.debug("[handleLogin]Both cookies existing, performing automatic login with cookies.");
 					
 					JsonObject authInfo = new JsonObject().put("username", tokenId).put("password", clearToken);
-					DatabaseVerticle.authProvider.setAuthenticationQuery(DatabaseVerticle.AUTHENTICATE_QUERY_FOR_TOKEN).authenticate(authInfo, res -> {
+					DatabaseVerticle.authProvider.setAuthenticationQuery(DatabaseVerticle.AUTHENTICATE_QUERY_FOR_TOKEN).authenticate(authInfo, Sync.fiberHandler(res -> {
 						if (res.succeeded()) {
 							// user authenticated
 							User user = res.result();
@@ -139,7 +140,29 @@ public class HttpServerVerticle extends AbstractVerticle {
 							ctx.setUser(user);
 							ctx.session().put("user_id", userHash);
 							
-							//TODO : Reissue a new auth token and delete the old one 
+							//Reissue a new auth token and delete the old one 
+							LOGGER.info("[handleLogin]Issue a new token.");
+							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.MANAGE_TOKEN.toString()).addHeader("sub_action", UserManagerAction.REISSUE_TOKEN.toString());
+							String newClearToken = generateAuthToken();
+							JsonObject reissueTokenRequest = new JsonObject()
+																.put("token_id", tokenId)
+																.put("user_id", userHash)
+																.put("auth_token", newClearToken)
+																.put("valid_to", new Date().getTime()+COOKIE_MAX_AGE*1000);
+							
+							Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),reissueTokenRequest,options,h));
+							
+							JsonObject returnedUser = result.body().getJsonObject("user");
+							Integer newTokenId = result.body().getInteger("token_id");
+							
+							//creating a new cookie
+							LOGGER.info("[handleLogin]Create a new auth token cookie.");
+							ctx.addCookie(Cookie.cookie("auth_token",newClearToken+"_"+newTokenId).setMaxAge(COOKIE_MAX_AGE));
+							LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("auth_token").getName() +":"+ctx.getCookie("auth_token").getValue()+"}");
+							
+							LOGGER.info("[handleLogin]Setting user into session.");
+							ctx.session().put("user", returnedUser);
+							
 							doRedirect(ctx.request().response(), "/");
 							
 						}
@@ -151,7 +174,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 							userHashCookie.setMaxAge(0);
 							renderHandlebarsPage(ctx, "login");
 						}
-					});
+					}));
 					
 				}
 				else
@@ -193,7 +216,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 																.put("auth_token", clearToken)
 																.put("valid_to", new Date().getTime()+COOKIE_MAX_AGE*1000);
 							
-							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.LOG_IN_REMEMBER_ME.toString());
+							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.REMEMBER_ME.toString());
 							LOGGER.debug("[handleLogin]Calling user manager LOG_IN_REMEMBER_ME with rememberMeRequest: " + rememberMeRequest);
 							
 							vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), rememberMeRequest, options,
@@ -274,7 +297,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 				reply -> {
 
 					if (reply.failed()) {
-						LOGGER.error("[handleSignUp] Sign up failed with error:  " + reply.cause());
+						LOGGER.error("[handleSignUp] Sign up failed:  " + reply.cause());
 						ReplyException exception = (ReplyException) reply.cause();
 						ctx.fail(exception.failureCode());
 					} else {
@@ -293,8 +316,9 @@ public class HttpServerVerticle extends AbstractVerticle {
 								ctx.response().putHeader("location", "/").setStatusCode(303).end();
 
 							} else {
-								LOGGER.error(res.cause().getMessage());
-								ctx.fail(res.cause());
+								
+								LOGGER.error("[handleSignUp]Login failed after signup : " + res.cause().getMessage());
+								ctx.fail(403);
 							}
 						});
 
@@ -370,7 +394,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 	
 				if (reply.failed()) {
 					LOGGER.error("[handleHomePage]Finding user failed with error:  " + reply.cause());
-					ctx.fail(((ReplyException)reply.cause()).failureCode());
+					ctx.fail((ReplyException)reply.cause());
 				} 
 				else {
 					JsonObject user = (JsonObject)reply.result().body();
@@ -410,8 +434,19 @@ public class HttpServerVerticle extends AbstractVerticle {
 		LOGGER.debug("[handleFailure]Status code: " + ctx.statusCode());
 		LOGGER.debug("[handleFailure]Failure: " + ctx.failure());
 		LOGGER.debug("[handleFailure]Path:" + ctx.request().path());
+		
+		int statusCode = 0;
+		
+		if(ctx.statusCode()==-1 && ctx.failure() instanceof io.vertx.core.eventbus.ReplyException){
+			
+			ReplyException re = (ReplyException)ctx.failure();
+			statusCode = re.failureCode();
+		}
+		
+		else 
+			statusCode = ctx.statusCode();
 
-		switch (ctx.statusCode()) {
+		switch (statusCode) {
 
 		case 404:
 
@@ -425,12 +460,19 @@ public class HttpServerVerticle extends AbstractVerticle {
 			renderHandlebarsPage(ctx, "login");
 			break;
 
-		case 803:
-
+		case 804: //Email already exists
+			
 			ctx.put("signup_failed", true);
 			renderHandlebarsPage(ctx, "login");
 			break;
 
+		case 901:
+			
+			ctx.put("error_message", "Database Error!");
+			//ctx.failure().printStackTrace();
+			renderHandlebarsPage(ctx, "error");
+			break;
+			
 		default:
 
 			ctx.put("error_message", ctx.failure());
@@ -476,9 +518,9 @@ public class HttpServerVerticle extends AbstractVerticle {
 	
 	private void deleteToken(String tokenId){
 
-		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_DELETE.toString());
+		DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.MANAGE_TOKEN.toString()).addHeader("sub_action", UserManagerAction.DELETE_TOKEN.toString());
 		JsonObject deleteTokenRequest = new JsonObject().put("token_id", tokenId);
-		vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), deleteTokenRequest, options, reply -> {
+		vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), deleteTokenRequest, options, reply -> {
 			
 			if (reply.succeeded()) {
 				LOGGER.info(reply.result().body().toString());
@@ -487,7 +529,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 				LOGGER.info("Deleting token failed : " + reply.cause());
 			}
 		});
-	}	
+	}
 	
 	/**
 	 *  Generate authentication token for cookie 

@@ -26,6 +26,12 @@
 
 		<dependency>
 			<groupId>io.vertx</groupId>
+			<artifactId>vertx-sync</artifactId>
+			<version>${vertx.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>io.vertx</groupId>
 			<artifactId>vertx-web</artifactId>
 			<version>${vertx.version}</version>
 		</dependency>
@@ -36,11 +42,8 @@
 			<version>${vertx.version}</version>
 		</dependency>
 
-		<dependency>
-			<groupId>io.vertx</groupId>
-			<artifactId>vertx-auth-shiro</artifactId>
-			<version>${vertx.version}</version>
-		</dependency>
+		<!-- <dependency> <groupId>io.vertx</groupId> <artifactId>vertx-auth-shiro</artifactId> 
+			<version>${vertx.version}</version> </dependency> -->
 
 		<dependency>
 			<groupId>io.vertx</groupId>
@@ -149,6 +152,32 @@
 	</build>
 
 
+	<profiles>
+		<profile>
+			<id>aot</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>com.vlkan</groupId>
+						<artifactId>quasar-maven-plugin</artifactId>
+						<version>0.7.5</version>
+						<configuration>
+							<check>true</check>
+							<debug>true</debug>
+							<verbose>true</verbose>
+						</configuration>
+						<executions>
+							<execution>
+								<goals>
+									<goal>instrument</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 	<repositories>
 		<repository>

@@ -89,6 +89,10 @@ ul.nav li a {
     color: #4275a0;
 }
 
+.alert-warning {
+	color: #ce1b07;
+}
+
 .thumbnail{
 	margin-left: 30px;
 }
