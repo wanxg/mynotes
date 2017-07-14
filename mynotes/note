@@ -11,6 +11,3 @@ Remaining point is how to delete token if the cookie gets expired ???
 
 
 2. user role management, admin to manage the user
-
-
-3. re-issue a token after every auto-login and delete the old token
