@@ -1,5 +1,9 @@
 package com.wanxg.mynotes.database;
 
+import static com.wanxg.mynotes.database.DataBaseQueries.*;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.List;
 
@@ -12,6 +16,7 @@ import com.wanxg.mynotes.util.FailureCode;
 import com.wanxg.mynotes.util.WarningCode;
 
 import co.paralleluniverse.fibers.Suspendable;
+import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
@@ -22,77 +27,14 @@ import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
 import io.vertx.ext.sync.Sync;
-import io.vertx.ext.sync.SyncVerticle;
 
-public class DatabaseVerticle extends SyncVerticle {
+public class DatabaseVerticle extends AbstractVerticle {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseVerticle.class);
 
 	public static JDBCClient dbClient;
 	public static JDBCAuth authProvider;
 
-	/*************************************************DDL***************************************************/
-	
-	private static final String SQL_CREATE_TABLE_USER = "CREATE TABLE IF NOT EXISTS user ("
-			+ "user_id VARCHAR(255) NOT NULL, "
-			+ "username VARCHAR(255) NOT NULL PRIMARY KEY, "
-			+ "fullname VARCHAR(255) NOT NULL, "
-			+ "password VARCHAR(255) NOT NULL, "
-			+ "password_salt VARCHAR(255) NOT NULL, "
-			+ "creation TIMESTAMP(0) DEFAULT NOW,"
-			+ "active INTEGER DEFAULT 1 NOT NULL)";
-
-	
-	private static final String SQL_CREATE_TABLE_AUTH_TOKEN = "CREATE TABLE IF NOT EXISTS auth_token ("
-			+ "id VARCHAR(10) NOT NULL, "
-			+ "username VARCHAR(255) NOT NULL, "
-			+ "token VARCHAR(255) NOT NULL, "
-			+ "token_salt VARCHAR(255) NOT NULL, "
-			+ "creation TIMESTAMP(0) DEFAULT NOW NOT NULL, "
-			+ "valid_to TIMESTAMP(0) NOT NULL, "
-			+ "deleted INTEGER DEFAULT 0 NOT NULL, "
-			+ "PRIMARY KEY (username,token))";
-	
-	private static final String SQL_ALTER_TABLE_AUTH_TOKEN_ADD_CONSTRAINT_FOREIGN_KEY_USERNAME = "ALTER TABLE auth_token ADD CONSTRAINT IF NOT EXISTS "
-			+ "fk_auth_token_username FOREIGN KEY (username) REFERENCES user(username)";
-	
-	
-	private static final String SQL_CREATE_TABLE_USER_ROLE = "CREATE TABLE IF NOT EXISTS user_role ("
-			+ "username VARCHAR(255) NOT NULL, "
-			+ "role VARCHAR(255) NOT NULL, "
-			+ "PRIMARY KEY (username,role))";
-
-	private static final String SQL_CREATE_TABLE_ROLE_PERM = "CREATE TABLE IF NOT EXISTS role_perm ("
-			+ "role VARCHAR(255) NOT NULL PRIMARY KEY, "
-			+ "permission VARCHAR(255) NOT NULL)";
-
-	private static final String SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_USERNAME = "ALTER TABLE user_role ADD CONSTRAINT IF NOT EXISTS "
-			+ "fk_user_role_username FOREIGN KEY (username) REFERENCES user(username)";
-
-	private static final String SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE = "ALTER TABLE user_role ADD CONSTRAINT IF NOT EXISTS "
-			+ "fk_user_role_role FOREIGN KEY (role) REFERENCES role_perm(role)";
-
-	
-	/***********************************************DML******************************************************/
-	
-	private static final String SQL_SELECT_USER_BY_USERNAME = "SELECT * FROM user WHERE username = ?";
-	
-	private static final String SQL_SELECT_USER_BY_USER_ID = "SELECT * FROM user WHERE user_id = ?";
-	
-	private static final String SQL_INSERT_INTO_USER = "INSERT INTO user (user_id,username,fullname,password,password_salt) VALUES (?,?,?,?,?)";
-	
-	private static final String SQL_UPDATE_USER_SET_ACTIVE = "UPDATE user SET ACTIVE = ? WHERE username = ?";
-	
-	private static final String SQL_SELECT_MAX_TOKEN_ID = "SELECT max(id) FROM auth_token";
-	
-	private static final String SQL_INSERT_INTO_AUTH_TOKEN = "INSERT INTO auth_token (id,username,token,token_salt,valid_to) VALUES (?,?,?,?, TO_TIMESTAMP(?, 'YYYY-MM-DD HH:MI:SS' ))";
-	
-	private static final String SQL_UPDATE_AUTH_TOKEN_SET_INVALID = "UPDATE auth_token SET deleted = 1 WHERE id = ?";
-	
-	public static final String SQL_SELECT_AUTH_TOKEN_BY_USER_ID_AND_TOKEN_ID = 
-			"SELECT token, token_salt FROM auth_token LEFT JOIN user ON auth_token.username = user.username WHERE user.user_id = ? AND auth_token.id = ?";
-	
-	public static final String AUTHENTICATE_QUERY_FOR_TOKEN = "SELECT token, token_salt FROM auth_token WHERE id = ? AND deleted = 0 AND valid_to >= NOW()";
 	
 	@Override
 	@Suspendable
@@ -110,10 +52,11 @@ public class DatabaseVerticle extends SyncVerticle {
 			} else {
 
 				SQLConnection connection = ar.result();
-				List<String> sqlStatements = Arrays.asList(SQL_CREATE_TABLE_USER, SQL_CREATE_TABLE_AUTH_TOKEN,
-						SQL_ALTER_TABLE_AUTH_TOKEN_ADD_CONSTRAINT_FOREIGN_KEY_USERNAME, SQL_CREATE_TABLE_USER_ROLE,
-						SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_USERNAME, SQL_CREATE_TABLE_ROLE_PERM,
-						SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE);
+				List<String> sqlStatements = Arrays.asList(SQL_CREATE_TABLE_LOCAL_USER, 
+						SQL_CREATE_TABLE_USER_PROFILE, SQL_ALTER_TABLE_USER_PROFILE_ADD_CONSTRAINT_FOREIGN_KEY_UID,
+						SQL_CREATE_TABLE_AUTH_TOKEN, SQL_ALTER_TABLE_AUTH_TOKEN_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL, 
+						SQL_CREATE_TABLE_USER_ROLE, SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL, 
+						SQL_CREATE_TABLE_ROLE_PERM, SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE);
 
 				connection.batch(sqlStatements, res -> {
 					connection.close();
@@ -161,16 +104,27 @@ public class DatabaseVerticle extends SyncVerticle {
 			this.updateUserActiveness(message);
 			break;
 
-		case USER_SELECT_BY_USERNAME:
+		case USER_SELECT_BY_EMAIL:
 
-			this.findUserByUsername(message);
+			this.findUserByEmail(message);
 			break;
 
-		case USER_SELECT_BY_USERID:
+		case USER_SELECT_BY_UID:
 
 			this.findUserById(message);
 			break;
 
+			
+		case USER_PROFILE_CREATE:
+			
+			this.createUserProfile(message);
+			break;
+			
+		case USER_PROFILE_SELECT_BY_USER_ID:
+			
+			this.findUserProfileByUserId(message);
+			break;
+			
 		case AUTH_TOKEN_CREATE:
 
 			this.createAuthToken(message);
@@ -187,37 +141,39 @@ public class DatabaseVerticle extends SyncVerticle {
 
 	}
 
+
 	/**
-	 * DB operation to create a new user, reply an information message
+	 * DB operation to create a new user, reply the user id
 	 * 
 	 * @param message
 	 */
 	@Suspendable
 	private void createUser(Message<JsonObject> message) {
 
-		String username = message.body().getString("username");
+		String email = message.body().getString("email");
 		String salt = authProvider.generateSalt();
 		String hash = authProvider.computeHash(message.body().getString("password"), salt);
 		
+		
 		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
 			 
+			String uid = authProvider.computeHash(email, salt);
 			UpdateResult create = Sync.awaitResult(h-> conn.updateWithParams(
 					SQL_INSERT_INTO_USER, new JsonArray()
-					.add(authProvider.computeHash(username, salt))
-					.add(username)
-					.add(message.body().getString("fullname"))
+					.add(uid)
+					.add(email)
 					.add(hash)
 					.add(salt), h));
 			
-			
 			if (create.getUpdated() != 0) {
-				LOGGER.info("[USER_CREATE]New user has been created.");
-				message.reply("User: " + username + " has been created");
+				LOGGER.info("[USER_CREATE]New user " + email + " has been created.");
+				message.reply(uid);
 			} else {
 				LOGGER.info("[USER_CREATE]User creation failed.");
 				message.fail(FailureCode.DB_ERROR.getCode(), "User creation failed.");
 			}
 		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
 			LOGGER.error("[USER_CREATE]User creation failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
@@ -231,43 +187,44 @@ public class DatabaseVerticle extends SyncVerticle {
 	@Suspendable
 	private void updateUserActiveness(Message<JsonObject> message) {
 		
-		String username = message.body().getString("username");
+		String email = message.body().getString("email");
 		Integer activeness = message.body().getInteger("activeness");
 		
 		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
 			 
-			UpdateResult update = Sync.awaitResult(h-> conn.updateWithParams(SQL_UPDATE_USER_SET_ACTIVE, new JsonArray().add(activeness).add(username), h));
+			UpdateResult update = Sync.awaitResult(h-> conn.updateWithParams(SQL_UPDATE_USER_SET_ACTIVE, new JsonArray().add(activeness).add(email), h));
 			
 			if (update.getUpdated() != 0) {
-				LOGGER.info("[USER_UPDATE_ACTIVE]User : " + username + "'s activeness has been updated to " + activeness);
-				message.reply("User: " + username + " 's activeness has been updated to " + activeness);
+				LOGGER.info("[USER_UPDATE_ACTIVE]User : " + email + "'s activeness has been updated to " + activeness);
+				message.reply("User: " + email + " 's activeness has been updated to " + activeness);
 			} else {
 				LOGGER.info("[USER_UPDATE_ACTIVE]No record has been updated.");
 				message.fail(WarningCode.USER_NOT_FOUND.getCode(), "User not found.");
 			}
 		} catch(Exception e){
-			LOGGER.error("[USER_UPDATE_ACTIVE]Updating user activeness:" + username + " failed:" + e.getMessage());
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_UPDATE_ACTIVE]Updating user activeness:" + email + " failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 		
 	}
 
 	/**
-	 * DB operation to find a user by user name, reply a user json object which can be empty if the user is not found
+	 * DB operation to find a user by email, reply a user json object which can be empty if the user is not found
 	 * 
 	 * @param message
 	 */
 	@Suspendable
-	private void findUserByUsername(Message<JsonObject> message) {
+	private void findUserByEmail(Message<JsonObject> message) {
 
-		String username = message.body().getString("username");
+		String email = message.body().getString("email");
 
 		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
 			 
-			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_BY_USERNAME, new JsonArray().add(username), h));
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_BY_EMAIL, new JsonArray().add(email), h));
 			
-			LOGGER.debug("[USER_SELECT_BY_USERNAME]Query successful");
-			LOGGER.info("[USER_SELECT_BY_USERNAME]User found: " + query.getNumRows());
+			LOGGER.debug("[USER_SELECT_BY_EMAIL]Query successful");
+			LOGGER.info("[USER_SELECT_BY_EMAIL]User found: " + query.getNumRows());
 			if (query.getNumRows() != 0) {
 					
 				LOGGER.debug(query.getRows().toString());
@@ -275,11 +232,12 @@ public class DatabaseVerticle extends SyncVerticle {
 			}
 			else{
 				
-				LOGGER.info("[USER_SELECT_BY_USERNAME]User not found.");
+				LOGGER.info("[USER_SELECT_BY_EMAIL]User not found.");
 				message.reply(new JsonObject());
 			}
 		} catch(Exception e){
-			LOGGER.error("[USER_SELECT_BY_USERNAME]Querying user for username " + username + " failed: " + e.getMessage());
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_SELECT_BY_EMAIL]Querying user for email " + email + " failed: " + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 		 
@@ -294,29 +252,116 @@ public class DatabaseVerticle extends SyncVerticle {
 	@Suspendable
 	private void findUserById(Message<JsonObject> message) {
 
-		String userId = message.body().getString("user_id");
+		String uid = message.body().getString("uid");
 
 		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
 			 
-			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_BY_USER_ID, new JsonArray().add(userId), h));
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_BY_UID, new JsonArray().add(uid), h));
 			
-			LOGGER.debug("[USER_SELECT_BY_USERID]Query successful");
-			LOGGER.info("[USER_SELECT_BY_USERID]User found: " + query.getNumRows());
+			LOGGER.debug("[USER_SELECT_BY_UID]Query successful");
+			LOGGER.info("[USER_SELECT_BY_UID]User found: " + query.getNumRows());
 			if (query.getNumRows() != 0) {
 					
 				LOGGER.debug(query.getRows().toString());
 				message.reply(query.getRows().get(0));
 			}
 			else{
-				LOGGER.info("[USER_SELECT_BY_USERID]User not found.");
+				LOGGER.info("[USER_SELECT_BY_UID]User not found.");
 				message.reply(new JsonObject());
 			}
 		} catch(Exception e){
-			LOGGER.error("[USER_SELECT_BY_USERID]Querying user for user id " + userId + " failed:" + e.getMessage());
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_SELECT_BY_USERID]Querying user for user id " + uid + " failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 		
 	}
+	
+	
+	/**
+	 * DB operation to create a new user profile, reply the profile id
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void createUserProfile(Message<JsonObject> message) {
+		
+		String uid = message.body().getString("uid");
+		String email = message.body().getString("email");
+		String username = message.body().getString("username");
+		String firstName = message.body().getString("firstName");
+		String lastName = message.body().getString("lastName");
+		String photoUrl = message.body().getString("photoUrl");
+		Integer gender = message.body().getInteger("gender");
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			
+			JsonArray params = new JsonArray();
+			
+			if(uid==null) params.addNull(); else params.add(uid);
+			params.add(email);
+			params.add(username);
+			if(firstName==null) params.addNull(); else params.add(firstName);
+			if(lastName==null) params.addNull(); else params.add(lastName);
+			if(photoUrl==null) params.addNull(); else params.add(photoUrl);
+			if(gender==null) params.addNull(); else params.add(gender);
+			
+			UpdateResult create = Sync.awaitResult(h-> conn.updateWithParams(
+					
+					SQL_INSERT_INTO_USER_PROFILE, params,h));
+			
+			if (create.getUpdated() != 0) {
+				
+				LOGGER.info("[USER_PROFILE_CREATE]New user profile has been created for: " + email);
+				message.reply(create.getKeys().getInteger(0));
+				
+			} else {
+				LOGGER.info("[USER_PROFILE_CREATE]User profile creation failed.");
+				message.fail(FailureCode.DB_ERROR.getCode(), "User profile creation failed.");
+			}
+			
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_PROFILE_CREATE]User profile creation failed:" + e.getCause());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	
+	/**
+	 * DB operation to find a user profile by user id, reply a user profile json object which can be empty if the user is not found
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void findUserProfileByUserId(Message<JsonObject> message) {
+		
+		String userId = message.body().getString("userId");
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			 
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_PROFILE_BY_USER_ID, new JsonArray().add(userId), h));
+			
+			LOGGER.debug("[USER_PROFILE_SELECT_BY_USER_ID]Query successful");
+			LOGGER.info("[USER_PROFILE_SELECT_BY_USER_ID]User profile found: " + query.getNumRows());
+			if (query.getNumRows() != 0) {
+					
+				LOGGER.debug(query.getRows().toString());
+				message.reply(query.getRows().get(0));
+			}
+			else{
+				LOGGER.info("[USER_PROFILE_SELECT_BY_USER_ID]User profile not found.");
+				message.reply(new JsonObject());
+			}
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_PROFILE_SELECT_BY_USER_ID]Querying user profile for user id " + userId + " failed:" + e.getMessage());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
 
 	/**
 	 * DB operation to create a new authentication token for login with cookie, reply the id of the created token
@@ -325,14 +370,14 @@ public class DatabaseVerticle extends SyncVerticle {
 	 */
 	@Suspendable
 	private void createAuthToken(Message<JsonObject> message) {
-		String username = message.body().getString("username");
+		String email = message.body().getString("email");
 		String token = message.body().getString("auth_token");
 		Long validTo = message.body().getLong("valid_to");
 
 		String salt = authProvider.generateSalt();
 		String hash = authProvider.computeHash(token, salt);
 
-		MutableInt maxTokenId = new MutableInt(10000000);
+		MutableInt maxTokenId = new MutableInt(DataBaseQueries.TOKEN_INITIAL_ID);
 
 		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
 			
@@ -347,13 +392,13 @@ public class DatabaseVerticle extends SyncVerticle {
 			UpdateResult create = Sync.awaitResult(h-> conn.updateWithParams(
 												SQL_INSERT_INTO_AUTH_TOKEN, new JsonArray()
 																					.add(String.valueOf(maxTokenId.getValue() + 1))
-																					.add(username)
+																					.add(email)
 																					.add(hash)
 																					.add(salt)
 																					.add(new java.sql.Timestamp(validTo).toString()),h));
 			if (create.getUpdated() != 0) {
 				LOGGER.info("[USER_TOKEN_CREATE]" + create.getUpdated()
-						+ " new token has been created for the user: " + username + " with id: "
+						+ " new token has been created for the user: " + email + " with id: "
 						+ (maxTokenId.getValue() + 1));
 				message.reply(maxTokenId.getValue() + 1);
 			} else {
@@ -362,7 +407,8 @@ public class DatabaseVerticle extends SyncVerticle {
 			}
 			
 		} catch(Exception e){
-			LOGGER.error("[USER_TOKEN_CREATE]Creating a new token for the user: " + username + " failed:" + e.getMessage());
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_TOKEN_CREATE]Creating a new token for the user: " + email + " failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 		
@@ -391,10 +437,17 @@ public class DatabaseVerticle extends SyncVerticle {
 			}
 		
 		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
 			LOGGER.error("[AUTH_TOKEN_DELETE]Deleting token: " + tokenId + " failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 
+	}
+	
+	private String printStackTrace(Exception e){
+		StringWriter sw = new StringWriter();
+		e.printStackTrace(new PrintWriter(sw));
+		return sw.toString();
 	}
 
 }

@@ -105,7 +105,7 @@ public class UserManagerTest {
 		String token = HttpServerVerticle.generateAuthToken();
 		
 		JsonObject rememberMeRequest = new JsonObject().put("username", email).put("auth_token", token);
-		DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.LOG_IN_REMEMBER_ME.toString());
+		DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.REMEMBER_ME.toString());
 		LOGGER.debug("[testLoginRememberMe]Calling user manager LOG_IN_REMEMBER_ME with rememberMeRequest: " + rememberMeRequest);
 		
 		

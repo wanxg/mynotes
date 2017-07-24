@@ -13,6 +13,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<vertx.version>3.4.2</vertx.version>
+		<google.api.client.version>1.22.0</google.api.client.version>
 		<main.verticle>com.wanxg.mynotes.MainVerticle</main.verticle>
 	</properties>
 
@@ -35,6 +36,12 @@
 			<artifactId>vertx-web</artifactId>
 			<version>${vertx.version}</version>
 		</dependency>
+		
+		<dependency>
+			<groupId>io.vertx</groupId>
+			<artifactId>vertx-web-client</artifactId>
+			<version>${vertx.version}</version>
+		</dependency>
 
 		<dependency>
 			<groupId>io.vertx</groupId>
@@ -49,6 +56,18 @@
 			<groupId>io.vertx</groupId>
 			<artifactId>vertx-auth-jdbc</artifactId>
 			<version>${vertx.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>io.vertx</groupId>
+			<artifactId>vertx-auth-oauth2</artifactId>
+			<version>${vertx.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.api-client</groupId>
+			<artifactId>google-api-client</artifactId>
+			<version>${google.api.client.version}</version>
 		</dependency>
 
 		<dependency>

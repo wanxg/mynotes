@@ -72,12 +72,42 @@
 							</div>
 
 							<button class="btn btn-outline-primary btn-block login" type="submit">Login in</button>
+							
 						</form>
-
-
+						
+						<div class="social-signin">
+							<h2 class="social-signin-heading">or</h2>
+						</div>
+						
+						<div class="form-signin">
+							
+							
+							<a href="/googlelogin" class="btn btn-outline-primary  btn-social-icon btn-google" title="Login in with Google">
+	   							 <span class="fa fa-google"></span>
+	 						</a>
+	 						
+	 						<a href="/facebooklogin" class="btn btn-outline-primary  btn-social-icon btn-facebook" title="Login in with Facebook">
+	   							 <span class="fa fa-facebook"></span>
+	 						</a>
+	 						
+<!-- 	 						<button class="btn btn-outline-primary  btn-social-icon btn-twitter" title="Login in with Twitter">
+	   							 <span class="fa fa-twitter"></span>
+	 						</button>
+	 						
+	 						<button class="btn btn-outline-primary  btn-social-icon btn-weibo" title="Login in with Weibo">
+	   							 <span class="fa fa-weibo"></span>
+	 						</button> 
+	 						
+	 						<a href="wechatlogin" class="btn btn-outline-primary  btn-social-icon btn-wechat" title="Login in with WeChat">
+	   							 <span class="fa fa-wechat"></span>
+	 						</a> -->
+							
+						</div>
+						
 					</div>
 
 					<div id="signup" class="tab-pane fade {{#if signup_failed}}show active{{else}}{{/if}}">
+					
 						<form class="form-signin" action="/signup" method="post">
 							<h2 class="form-signin-heading">Please sign up</h2>
 							
@@ -90,9 +120,9 @@
 							</div>
 							{{/if}} 
 
-							<label for="fullName" class="sr-only">Full name</label> 
+							<label for="userName" class="sr-only">User name</label> 
 							
-							<input type="text" id="full_name" class="form-control" name="full_name" placeholder="Full name" required autofocus> 
+							<input type="text" id="user_name" class="form-control" name="user_name" placeholder="User name" required autofocus> 
 							
 							<label for="signup_email" class="sr-only">Email address</label> 
 							

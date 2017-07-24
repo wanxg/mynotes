@@ -69,6 +69,17 @@ ul.nav li a {
     border-color: #555555;
 }
 
+.btn-social-icon{
+    margin-right: 15px;
+    margin-bottom: 10px;
+    height: 40px;
+    width: 40px;
+}
+
+.btn-social-icon>:first-child {
+	line-height: 40px;
+}	
+
 .row .col {
 	margin-bottom: 50px;
 }
@@ -95,6 +106,15 @@ ul.nav li a {
 
 .thumbnail{
 	margin-left: 30px;
+}
+
+
+.social-signin{
+	
+	max-width: 360px;
+    padding: 5px;
+    padding-left: 15px;
+    margin: 0 auto;
 }
 
 .form-signin {
