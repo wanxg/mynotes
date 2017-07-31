@@ -82,6 +82,15 @@
 						<div class="form-signin">
 							
 							
+							{{#if social_login_failed}}
+							<div class="alert alert-warning alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								Social login failed, please try later.
+							</div>
+							{{/if}} 
+							
 							<a href="/googlelogin" class="btn btn-outline-primary  btn-social-icon btn-google" title="Login in with Google">
 	   							 <span class="fa fa-google"></span>
 	 						</a>

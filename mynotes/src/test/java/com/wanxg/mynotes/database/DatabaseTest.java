@@ -108,14 +108,59 @@ public class DatabaseTest {
 		
 	}
 	
+	
 	@Test
-	public void findUserProfile(TestContext context){
+	public void testUpdateSocialUser(TestContext context) {
+
+		String externalId = "10211995360172847";
+		String username = "wanxg";
+
+		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.SOCIAL_USER_UPDATE.toString());
+
+		JsonObject request = new JsonObject()
+				.put("externalId", externalId)
+				.put("username", username);
 		
+		Async async = context.async();
+		
+		vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), request, options, updateReply->{
+			
+			if(updateReply.succeeded()){
+				LOGGER.info(updateReply.result().body().toString());
+			}
+			
+			else {
+				ReplyException exception = (ReplyException) updateReply.cause();
+				LOGGER.info(exception.failureCode() + ", " +exception.getMessage());
+				
+			}
+			
+			async.complete();
+			
+		});
+		
+	}
+	
+	@Test
+	public void testFindUserProfile(TestContext context){
+		
+		/*
+			
 		String userId = "B85E134B8FEE7FFADF31223B3FEFFA7F7039A02978ACAAE3C29893ABE0583935E19CC7B91B5472B0C1FF15DFB2F6976FE80B73937A9F507C124EEE652B34ADE1";
-
-		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_USER_ID.toString());;
-
+		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_USER_ID.toString());
 		JsonObject findUserProfileRequest = new JsonObject().put("userId", userId);
+		
+		
+		Integer pid = 100000002;
+		options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_PROFILE_ID.toString());;
+		findUserProfileRequest = new JsonObject().put("pid", pid);
+		
+		*/
+		
+		String email = "eon.wang@gmail.com";
+		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_EMAIL.toString());
+		JsonObject findUserProfileRequest = new JsonObject().put("email", email);
+		
 		
 		Async async = context.async();
 
@@ -132,7 +177,7 @@ public class DatabaseTest {
 			}
 
 			else {
-				LOGGER.info("[testFindUserProfile]Finding user profile failed : " + reply.cause());
+				LOGGER.error("[testFindUserProfile]Finding user profile failed : " + reply.cause());
 			}
 			
 			async.complete();
@@ -191,9 +236,6 @@ public class DatabaseTest {
 			findUserRequest.put("uid", uid);
 		}
 		
-		final DeliveryOptions opt = options;
-		
-		
 		Async async = context.async();
 
 		vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), findUserRequest, options, reply -> {
@@ -238,7 +280,7 @@ public class DatabaseTest {
 	public void testCreateToken(TestContext context) {
 
 		String token = HttpServerVerticle.generateAuthToken();
-		String email = "wanxiaolong@gmail.com";
+		String uid = "B85E134B8FEE7FFADF31223B3FEFFA7F7039A02978ACAAE3C29893ABE0583935E19CC7B91B5472B0C1FF15DFB2F6976FE80B73937A9F507C124EEE652B34ADE1";
 
 		long validTo = new Date().getTime()+COOKIE_MAX_AGE*1000;
 		
@@ -250,7 +292,7 @@ public class DatabaseTest {
 		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_CREATE.toString());
 
 		JsonObject createTokenRequest = new JsonObject()
-											.put("email", email)
+											.put("uid", uid)
 											.put("auth_token", token)
 											.put("valid_to", validTo );;
 		

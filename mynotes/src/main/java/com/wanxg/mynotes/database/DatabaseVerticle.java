@@ -54,7 +54,8 @@ public class DatabaseVerticle extends AbstractVerticle {
 				SQLConnection connection = ar.result();
 				List<String> sqlStatements = Arrays.asList(SQL_CREATE_TABLE_LOCAL_USER, 
 						SQL_CREATE_TABLE_USER_PROFILE, SQL_ALTER_TABLE_USER_PROFILE_ADD_CONSTRAINT_FOREIGN_KEY_UID,
-						SQL_CREATE_TABLE_AUTH_TOKEN, SQL_ALTER_TABLE_AUTH_TOKEN_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL, 
+						SQL_CREATE_TABLE_SOCIAL_USER, SQL_ALTER_TABLE_SOCIAL_USER_ADD_CONSTRAINT_FOREIGN_KEY_PID,
+						SQL_CREATE_TABLE_AUTH_TOKEN, SQL_ALTER_TABLE_AUTH_TOKEN_ADD_CONSTRAINT_FOREIGN_KEY_UID, 
 						SQL_CREATE_TABLE_USER_ROLE, SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL, 
 						SQL_CREATE_TABLE_ROLE_PERM, SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE);
 
@@ -96,7 +97,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 
 		case USER_CREATE:
 
-			this.createUser(message);
+			this.createLocalUser(message);
 			break;
 			
 		case USER_UPDATE_ACTIVE:
@@ -114,7 +115,6 @@ public class DatabaseVerticle extends AbstractVerticle {
 			this.findUserById(message);
 			break;
 
-			
 		case USER_PROFILE_CREATE:
 			
 			this.createUserProfile(message);
@@ -123,6 +123,31 @@ public class DatabaseVerticle extends AbstractVerticle {
 		case USER_PROFILE_SELECT_BY_USER_ID:
 			
 			this.findUserProfileByUserId(message);
+			break;
+			
+		case USER_PROFILE_SELECT_BY_PROFILE_ID:
+			
+			this.findUserProfileByProfileId(message);
+			break;
+			
+		case USER_PROFILE_SELECT_BY_EMAIL:
+			
+			this.findUserProfileByEmail(message);
+			break;
+			
+		case SOCIAL_USER_CREATE:
+			
+			this.createSocialUser(message);
+			break;
+		
+		case SOCIAL_USER_UPDATE:
+			
+			this.updateSocialUser(message);
+			break;
+			
+		case SOCIAL_USER_SELECT_BY_EXTERNAL_ID:
+			
+			this.findSocialUserByExternalId(message);
 			break;
 			
 		case AUTH_TOKEN_CREATE:
@@ -136,6 +161,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 			break;
 
 		default:
+			LOGGER.error("Bad database operation: " + actionCode);
 			message.fail(FailureCode.BAD_DB_OPERATION.getCode(), "Bad database operation: " + actionCode);
 		}
 
@@ -148,7 +174,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	 * @param message
 	 */
 	@Suspendable
-	private void createUser(Message<JsonObject> message) {
+	private void createLocalUser(Message<JsonObject> message) {
 
 		String email = message.body().getString("email");
 		String salt = authProvider.generateSalt();
@@ -178,7 +204,6 @@ public class DatabaseVerticle extends AbstractVerticle {
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 	}
-	
 	
 	/**
 	 *  DB operation to make a user inactive, reply an information message
@@ -286,7 +311,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	@Suspendable
 	private void createUserProfile(Message<JsonObject> message) {
 		
-		String uid = message.body().getString("uid");
+		String userId = message.body().getString("userId");
 		String email = message.body().getString("email");
 		String username = message.body().getString("username");
 		String firstName = message.body().getString("firstName");
@@ -298,7 +323,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 			
 			JsonArray params = new JsonArray();
 			
-			if(uid==null) params.addNull(); else params.add(uid);
+			if(userId==null) params.addNull(); else params.add(userId);
 			params.add(email);
 			params.add(username);
 			if(firstName==null) params.addNull(); else params.add(firstName);
@@ -313,7 +338,9 @@ public class DatabaseVerticle extends AbstractVerticle {
 			if (create.getUpdated() != 0) {
 				
 				LOGGER.info("[USER_PROFILE_CREATE]New user profile has been created for: " + email);
-				message.reply(create.getKeys().getInteger(0));
+				//message.reply(create.getKeys().getInteger(0));
+				message.body().put("pid", create.getKeys().getInteger(0));
+				findUserProfileByProfileId(message);
 				
 			} else {
 				LOGGER.info("[USER_PROFILE_CREATE]User profile creation failed.");
@@ -330,7 +357,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	
 	
 	/**
-	 * DB operation to find a user profile by user id, reply a user profile json object which can be empty if the user is not found
+	 * DB operation to find a user profile by user id, reply a user profile json object which can be empty if the user profile is not found
 	 * 
 	 * @param message
 	 */
@@ -362,6 +389,213 @@ public class DatabaseVerticle extends AbstractVerticle {
 		
 	}
 	
+	
+	/**
+	 * DB operation to find a user profile by profile id, reply a user profile json object which can be empty if the user profile is not found
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void findUserProfileByProfileId(Message<JsonObject> message) {
+		
+		Integer pid = message.body().getInteger("pid");
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			 
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_PROFILE_BY_PROFILE_ID, new JsonArray().add(pid), h));
+			
+			LOGGER.debug("[USER_PROFILE_SELECT_BY_PROFILE_ID]Query successful");
+			LOGGER.info("[USER_PROFILE_SELECT_BY_PROFILE_ID]User profile found: " + query.getNumRows());
+			if (query.getNumRows() != 0) {
+					
+				LOGGER.debug(query.getRows().toString());
+				message.reply(query.getRows().get(0));
+			}
+			else{
+				LOGGER.info("[USER_PROFILE_SELECT_BY_PROFILE_ID]User profile not found.");
+				message.reply(new JsonObject());
+			}
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_PROFILE_SELECT_BY_PROFILE_ID]Querying user profile for profile id " + pid + " failed:" + e.getMessage());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	/**
+	 * DB operation to find a user profile by email, reply a user profile json object which can be empty if the user profile is not found
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void findUserProfileByEmail(Message<JsonObject> message) {
+		
+		String email = message.body().getString("email");
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			 
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_USER_PROFILE_BY_EMAIL, new JsonArray().add(email), h));
+			
+			LOGGER.debug("[USER_PROFILE_SELECT_BY_EMAIL]Query successful");
+			LOGGER.info("[USER_PROFILE_SELECT_BY_EMAIL]User profile found: " + query.getNumRows());
+			if (query.getNumRows() != 0) {
+					
+				LOGGER.debug(query.getRows().toString());
+				message.reply(query.getRows().get(0));
+			}
+			else{
+				LOGGER.info("[USER_PROFILE_SELECT_BY_EMAIL]User profile not found.");
+				message.reply(new JsonObject());
+			}
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_PROFILE_SELECT_BY_EMAIL]Querying user profile for email " + email + " failed:" + e.getMessage());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	
+	/**
+	 * DB operation to create a new social user, reply the social user id
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void createSocialUser(Message<JsonObject> message) {
+		
+		Integer profileId = message.body().getInteger("profileId");
+		String socialProvider = message.body().getString("socialProvider");
+		String externalId = message.body().getString("externalId");
+		String email = message.body().getString("email");
+		String username = message.body().getString("username");
+		String firstName = message.body().getString("firstName");
+		String lastName = message.body().getString("lastName");
+		String photoUrl = message.body().getString("photoUrl");
+		Integer gender = message.body().getInteger("gender");
+		
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			
+			JsonArray params = new JsonArray();
+			
+			params.add(profileId);
+			params.add(socialProvider);
+			params.add(externalId);
+			if(email==null) params.addNull(); else params.add(email);
+			params.add(username);
+			if(firstName==null) params.addNull(); else params.add(firstName);
+			if(lastName==null) params.addNull(); else params.add(lastName);
+			if(photoUrl==null) params.addNull(); else params.add(photoUrl);
+			if(gender==null) params.addNull(); else params.add(gender);
+			
+			UpdateResult create = Sync.awaitResult(h-> conn.updateWithParams(
+					
+					SQL_INSERT_INTO_SOCIAL_USER, params,h));
+			
+			if (create.getUpdated() != 0) {
+				
+				LOGGER.info("[SOCIAL_USER_CREATE]New social user has been created for: " + username);
+				message.reply(create.getKeys().getInteger(0));
+				
+			} else {
+				LOGGER.info("[SOCIAL_USER_CREATE]Social user creation failed.");
+				message.fail(FailureCode.DB_ERROR.getCode(), "Social user creation failed.");
+			}
+			
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[SOCIAL_USER_CREATE]Social user creation failed:" + e.getCause());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	
+	/**
+	 * DB operation to update a social user, reply a string message
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void updateSocialUser(Message<JsonObject> message) {
+		
+		String externalId = message.body().getString("externalId");
+		String email = message.body().getString("email");
+		String username = message.body().getString("username");
+		String firstName = message.body().getString("firstName");
+		String lastName = message.body().getString("lastName");
+		String photoUrl = message.body().getString("photoUrl");
+		Integer gender = message.body().getInteger("gender");
+		
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			
+			JsonArray params = new JsonArray();
+			
+			if(email==null) params.addNull(); else params.add(email);
+			params.add(username);
+			if(firstName==null) params.addNull(); else params.add(firstName);
+			if(lastName==null) params.addNull(); else params.add(lastName);
+			if(photoUrl==null) params.addNull(); else params.add(photoUrl);
+			if(gender==null) params.addNull(); else params.add(gender);
+			params.add(externalId);
+			
+			UpdateResult result = Sync.awaitResult(h-> conn.updateWithParams(SQL_UPDATE_SOCIAL_USER, params,h));
+			
+			if (result.getUpdated() != 0) {
+				
+				LOGGER.info("[SOCIAL_USER_UPDATE]The social user " + externalId +" has been updated.");
+				message.reply("The social user : " + externalId +" has been updated");
+				
+			} else {
+				LOGGER.info("[SOCIAL_USER_UPDATE]Social user update failed.");
+				message.fail(FailureCode.DB_ERROR.getCode(), "Social user update failed.");
+			}
+			
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[SOCIAL_USER_UPDATE]Social user update failed:" + e.getCause());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	
+	/**
+	 * 
+	 * DB operation to find a social user by its external id
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void findSocialUserByExternalId(Message<JsonObject> message){
+		
+		String externalId = message.body().getString("externalId");
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			 
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_SOCIAL_USER_BY_EXTERNAL_ID, new JsonArray().add(externalId), h));
+			
+			LOGGER.debug("[SOCIAL_USER_SELECT_BY_EXTERNAL_ID]Query successful");
+			LOGGER.info("[SOCIAL_USER_SELECT_BY_EXTERNAL_ID]Social user found: " + query.getNumRows());
+			if (query.getNumRows() != 0) {
+					
+				LOGGER.debug(query.getRows().toString());
+				message.reply(query.getRows().get(0));
+			}
+			else{
+				LOGGER.info("[SOCIAL_USER_SELECT_BY_EXTERNAL_ID]Social user not found.");
+				message.reply(new JsonObject());
+			}
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[SOCIAL_USER_SELECT_BY_EXTERNAL_ID]Querying social user for external id " + externalId + " failed:" + e.getMessage());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+	}
+	
 
 	/**
 	 * DB operation to create a new authentication token for login with cookie, reply the id of the created token
@@ -370,7 +604,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	 */
 	@Suspendable
 	private void createAuthToken(Message<JsonObject> message) {
-		String email = message.body().getString("email");
+		String userId = message.body().getString("userId");
 		String token = message.body().getString("auth_token");
 		Long validTo = message.body().getLong("valid_to");
 
@@ -392,13 +626,13 @@ public class DatabaseVerticle extends AbstractVerticle {
 			UpdateResult create = Sync.awaitResult(h-> conn.updateWithParams(
 												SQL_INSERT_INTO_AUTH_TOKEN, new JsonArray()
 																					.add(String.valueOf(maxTokenId.getValue() + 1))
-																					.add(email)
+																					.add(userId)
 																					.add(hash)
 																					.add(salt)
 																					.add(new java.sql.Timestamp(validTo).toString()),h));
 			if (create.getUpdated() != 0) {
 				LOGGER.info("[USER_TOKEN_CREATE]" + create.getUpdated()
-						+ " new token has been created for the user: " + email + " with id: "
+						+ " new token has been created for the user: " + userId + " with id: "
 						+ (maxTokenId.getValue() + 1));
 				message.reply(maxTokenId.getValue() + 1);
 			} else {
@@ -408,7 +642,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 			
 		} catch(Exception e){
 			LOGGER.error(printStackTrace(e));
-			LOGGER.error("[USER_TOKEN_CREATE]Creating a new token for the user: " + email + " failed:" + e.getMessage());
+			LOGGER.error("[USER_TOKEN_CREATE]Creating a new token for the user: " + userId + " failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 		

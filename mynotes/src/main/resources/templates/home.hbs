@@ -1,73 +1,47 @@
 {{>header.hbs}}
 
-<div class="home_view">
+	<nav class="navbar navbar-toggleable-md navbar-light bg-faded">
 
-	<div class="container">
+		<button class="navbar-toggler navbar-toggler-right" type="button"
+			data-toggle="collapse" data-target="#navbarText"
+			aria-controls="navbarText" aria-expanded="false"
+			aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		</button>
 
-		<div class="row">
 
-			<div class="col"></div>
+		<a class="navbar-brand" href="/"> <img src="pic/brand.png"
+			alt="brand">
+		</a>
 
+		<div class="navbar-collapse collapse" id="navbarText"
+			aria-expanded="false">
+			<ul class="navbar-nav mr-auto">
+				<li class="nav-item active"><a class="nav-link" href="home">
+						<span class="sr-only">(current)</span>
+				</a></li>
+				<li class="nav-item"><a class="nav-link" href="#"></a></li>
+				<li class="nav-item"><a class="nav-link" href="about"></a></li>
+			</ul>
+
+			<form class="form-inline">
+				<input class="form-control mr-sm-2" type="text" placeholder="Search">
+				<button class="btn btn-outline-primary my-2 my-sm-0" type="submit">Search</button>
+			</form>
+
+
+			<ul class="nav navbar-nav navbar-right">
+				<li class="dropdown">
+					<img class="btn dropdown-toggle" src="{{photoUrl}}" alt="dropdown image" data-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+					
+					<ul class="dropdown-menu">
+						<li class="nav-item"><a class="dropdown-item" href="/profile">Profile<span class="caret"></span></a></li>
+						<li class="nav-item"><a class="dropdown-item" href="/logout">Log out <span class="caret"></span></a></li>
+					</ul>
+				</li>
+			</ul>
 		</div>
 
-
-		<div class="row">
-
-			<div class="col col-md-8"></div>
-
-			<div class="col col-md-4">
-
-				<ul class="nav justify-content-end">
-					<li class="nav-item"><a class="nav-link active">Hi,
-							{{username}}</a></li>
-					<li class="nav-item"><a class="nav-link" href="/logout">Log
-							out</a></li>
-				</ul>
-			</div>
-
-		</div>
-
-
-		<div class="row">
-
-			<div class="col"></div>
-
-		</div>
-
-		<div class="row">
-
-			<div class="col"></div>
-
-			<div class="col-6">
-
-				<ul class="nav nav-tabs" id="myTab" role="tablist">
-					<li class="nav-item"><a class="nav-link active"
-						data-toggle="tab" href="#login" role="tab">Note 1</a></li>
-					<li class="nav-item"><a class="nav-link" data-toggle="tab"
-						href="#signup" role="tab">Note 2</a></li>
-				</ul>
-
-				<div class="tab-content">
-					<div id="login" class="tab-pane fade show active">
-
-						<p>Note 1</p>
-
-					</div>
-
-					<div id="signup" class="tab-pane fade">
-
-						<p>Note 2</p>
-
-					</div>
-				</div>
-			</div>
-
-			<div class="col"></div>
-
-		</div>
-
-	</div>
-
-</div>
+	</nav>
 
 {{>footer.hbs}}

@@ -11,6 +11,7 @@ import com.wanxg.mynotes.core.UserManagerAction;
 import com.wanxg.mynotes.database.DataBaseQueries;
 import com.wanxg.mynotes.database.DatabaseVerticle;
 import com.wanxg.mynotes.util.EventBusAddress;
+import com.wanxg.mynotes.util.FailureCode;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
@@ -52,11 +53,16 @@ public class HttpServerVerticle extends AbstractVerticle {
 	private static final String GOOGLE_CLIENT_ID="700050092358-3il62628u6t9q2mu2h8ivb63dbtbde3h.apps.googleusercontent.com";
 	private static final String GOOGLE_CLIENT_SECRET="r7CsiXU4RQk5CSr4-2fGjPtx";
 	private static final String GOOGLE_REDIRECT_URI="https://localhost:8080/googleoauth2callback";
+	private static final String GOOGLE_TOKEN_VERIFICATION_URI="https://www.googleapis.com/oauth2/v3/tokeninfo?";
+	private static final String GOOGLE_USER_PROFILE_URI="https://www.googleapis.com/plus/v1/people/{userId}?";
+	//private static final String GOOGLE_USER_PROFILE_URI2="https://www.googleapis.com/userinfo/v2/me?";
+	//private static final String GOOGLE_USER_PROFILE_URI3="https://www.googleapis.com/oauth2/v2/userinfo?";
 	
 	private static final String FACEBOOK_APP_ID="1830829080578913";
 	private static final String FACEBOOK_APP_SECRET="3181ceb68c2ef7462671f0c14f1af5df";
 	private static final String FACEBOOK_REDIRECT_URI="https://localhost:8080/facebookauth2callback";
-	
+	private static final String FACEBOOK_DEBUG_TOKEN_URI="https://graph.facebook.com/debug_token?";
+	private static final String FACEBOOK_USER_PROFILE_URI="https://graph.facebook.com/me?";
 	
 	private final TemplateEngine engine = HandlebarsTemplateEngine.create();
 
@@ -127,6 +133,8 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 */
 	private void handleLogin(RoutingContext ctx) {
 
+		
+		// Login with cookie
 		if (ctx.request().method().equals(HttpMethod.GET)) {
 
 			LOGGER.debug("[handleLogin]Handling HTTP GET for login page");
@@ -161,22 +169,27 @@ public class HttpServerVerticle extends AbstractVerticle {
 							LOGGER.info("[handleLogin]Automatic login with cookies successful.");
 							LOGGER.debug("[handleLogin]User principal: " + user.principal());
 							ctx.setUser(user);
-							ctx.session().put("uid", userHash);
+							
+							// Retrieving user profile with user id
+							
+							JsonObject retrieveUserProfileRequest = new JsonObject().put("userId", userHash);
+							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.FIND_USER_PROFILE.toString());
+							Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),retrieveUserProfileRequest,options,h));
+							JsonObject userProfile = result.body();
 							
 							//Reissue a new auth token and delete the old one 
 							LOGGER.info("[handleLogin]Issue a new token.");
-							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.MANAGE_TOKEN.toString()).addHeader("sub_action", UserManagerAction.REISSUE_TOKEN.toString());
+							DeliveryOptions opt = new DeliveryOptions().addHeader("user", UserManagerAction.MANAGE_TOKEN.toString()).addHeader("sub_action", UserManagerAction.REISSUE_TOKEN.toString());
 							String newClearToken = generateAuthToken();
 							JsonObject reissueTokenRequest = new JsonObject()
 																.put("token_id", tokenId)
-																.put("uid", userHash)
+																.put("userId", userHash)
 																.put("auth_token", newClearToken)
 																.put("valid_to", new Date().getTime()+COOKIE_MAX_AGE*1000);
 							
-							Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),reissueTokenRequest,options,h));
+							Message<Integer> returnedTokenId = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),reissueTokenRequest,opt,h));
 							
-							JsonObject returnedUser = result.body().getJsonObject("user");
-							Integer newTokenId = result.body().getInteger("token_id");
+							Integer newTokenId = returnedTokenId.body();
 							
 							//creating a new cookie
 							LOGGER.info("[handleLogin]Create a new auth token cookie.");
@@ -184,7 +197,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 							LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("auth_token").getName() +":"+ctx.getCookie("auth_token").getValue()+"}");
 							
 							LOGGER.info("[handleLogin]Setting user into session.");
-							ctx.session().put("user", returnedUser);
+							ctx.session().put("userProfile", userProfile);
 							
 							doRedirect(ctx.request().response(), "/");
 							
@@ -205,6 +218,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 			}
 		}
 
+		// Login with user input
 		else if (ctx.request().method().equals(HttpMethod.POST)) {
 
 			LOGGER.debug("[handleLogin]Handling login form submit");
@@ -215,17 +229,30 @@ public class HttpServerVerticle extends AbstractVerticle {
 			boolean rememberMe = "remember_me".equals(ctx.request().getFormAttribute("remember_me"));
 
 			if (email == null || password == null) {
-				LOGGER.warn("[handleLogin]No email or password provided in the form.");
+				LOGGER.error("[handleLogin]No email or password provided in the form.");
 				ctx.fail(400);
 			} else {
 
 				JsonObject authInfo = new JsonObject().put("username", email).put("password", password);
-				DatabaseVerticle.authProvider.setAuthenticationQuery(DataBaseQueries.AUTHENTICATE_QUERY_ON_LOCAL_USER).authenticate(authInfo, res -> {
+				DatabaseVerticle.authProvider.setAuthenticationQuery(DataBaseQueries.AUTHENTICATE_QUERY_ON_LOCAL_USER).authenticate(authInfo, Sync.fiberHandler(res -> {
+					
 					if (res.succeeded()) {
 						// user authenticated
 						User user = res.result();
 						LOGGER.debug("[handleLogin]User principal: " + user.principal());
 						ctx.setUser(user);
+						
+						
+						//Retrieving user profile
+						
+						JsonObject retrieveUserProfileRequest = new JsonObject().put("email", email);
+						DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.FIND_USER_PROFILE.toString());
+						Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),retrieveUserProfileRequest,options,h));
+						JsonObject userProfile = result.body();
+						
+						LOGGER.info("[handleLogin]Adding user profile into session: " + userProfile);
+						
+						ctx.session().put("userProfile", userProfile);
 						
 						if(rememberMe && ctx.getCookie("auth_token")==null){
 							
@@ -233,16 +260,16 @@ public class HttpServerVerticle extends AbstractVerticle {
 							
 							String clearToken = generateAuthToken();
 							
-							//sending the auth token to database
+							// sending the auth token to database
 							JsonObject rememberMeRequest = new JsonObject()
-																.put("email", email)
+																.put("userId", userProfile.getString("USER_ID"))
 																.put("auth_token", clearToken)
 																.put("valid_to", new Date().getTime()+COOKIE_MAX_AGE*1000);
 							
-							DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.REMEMBER_ME.toString());
+							DeliveryOptions opt = new DeliveryOptions().addHeader("user", UserManagerAction.REMEMBER_ME.toString());
 							LOGGER.debug("[handleLogin]Calling user manager LOG_IN_REMEMBER_ME with rememberMeRequest: " + rememberMeRequest);
 							
-							vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), rememberMeRequest, options,
+							vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), rememberMeRequest, opt,
 									
 									reply -> {
 										
@@ -255,14 +282,9 @@ public class HttpServerVerticle extends AbstractVerticle {
 										
 										else{
 											
-											JsonObject result = (JsonObject)reply.result().body();
-											
-											JsonObject returnedUser = result.getJsonObject("user");
-											
-											String tokenId = result.getString("token_id");
+											String tokenId = reply.result().body().toString();
 											
 											LOGGER.info("[handleLogin]Remember me request successful.");
-											LOGGER.debug("[handleLogin]Returned user: " + returnedUser);
 											LOGGER.debug("[handleLogin]Returned token id: " + tokenId);
 											
 											LOGGER.debug("[handleLogin]Creating cookies");
@@ -271,12 +293,10 @@ public class HttpServerVerticle extends AbstractVerticle {
 											ctx.addCookie(Cookie.cookie("auth_token",clearToken+"_"+tokenId).setMaxAge(COOKIE_MAX_AGE));
 											LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("auth_token").getName() +":"+ctx.getCookie("auth_token").getValue()+"}");
 											
-											ctx.addCookie(Cookie.cookie("user_hash", returnedUser.getString("UID")).setMaxAge(COOKIE_MAX_AGE));
+											ctx.addCookie(Cookie.cookie("user_hash", userProfile.getString("USER_ID")).setMaxAge(COOKIE_MAX_AGE));
 											LOGGER.debug("[handleLogin]A cookie is created : {" + ctx.getCookie("user_hash").getName() +":"+ctx.getCookie("user_hash").getValue()+"}");
 										
 											LOGGER.info("[handleLogin]Token has bee stored, cookies are created. User login has been remembered. Setting user into session.");
-											
-											ctx.session().put("user", returnedUser);
 											
 											doRedirect(ctx.request().response(), "/");
 										}
@@ -285,14 +305,13 @@ public class HttpServerVerticle extends AbstractVerticle {
 						
 						} else {
 							// login without remember me
-							ctx.session().put("email", email);
 							doRedirect(ctx.request().response(), "/");
 						}
 					
 					} else {
 						ctx.fail(403); // Failed login
 					}
-				});
+				}));
 			}
 		}
 	}
@@ -326,104 +345,94 @@ public class HttpServerVerticle extends AbstractVerticle {
 	
 	private void handleGoogleCallback(RoutingContext ctx){
 		
-		LOGGER.debug("received google call back with Authorization Code.");
-		
+		LOGGER.debug("[HandleGoogleCallback]Received google call back with Authorization Code.");
 		
 		String googleAuthCode = ctx.request().getParam("code");
 		
 		JsonObject tokenConfig = new JsonObject()
 			    .put("code", googleAuthCode)
-			    .put("redirect_uri", "https://localhost:8080/googleoauth2callback");
+			    .put("redirect_uri", GOOGLE_REDIRECT_URI);
 		
 		OAuth2Auth oauth2 = GoogleAuth.create(vertx, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
 		
 		
 		oauth2.getToken(tokenConfig, res -> {
 			  if (res.failed()) {
-			    LOGGER.error("Access Token Error: " + res.cause().getMessage());
-			    doRedirect(ctx.request().response(), "/");
+			    LOGGER.error("[HandleGoogleCallback]Access token retrieval error: " + res.cause().getMessage());
+			    ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
+			    
 			  } else {
 			    // Get the access token object (the authorization code is given from the previous step).
 			    AccessToken token = res.result();
 			    
-			    LOGGER.debug("Received token : " + token.principal());
-			    LOGGER.debug("access_token : " + token.principal().getString("access_token"));
-			    LOGGER.debug("id_token : " + token.principal().getString("id_token"));
+			    LOGGER.debug("[HandleGoogleCallback]Received token : " + token.principal());
+			    String accessToken = token.principal().getString("access_token");
+			    LOGGER.debug("[HandleGoogleCallback]access_token : " + accessToken );
+			    LOGGER.debug("[HandleGoogleCallback]id_token : " + token.principal().getString("id_token"));
 			    
 			    JsonObject params = new JsonObject().put("id_token",token.principal().getString("id_token"));
 
 			    // verify id token
-			    oauth2.api(HttpMethod.GET, "https://www.googleapis.com/oauth2/v3/tokeninfo?", params, verify ->{
+			    oauth2.api(HttpMethod.GET, GOOGLE_TOKEN_VERIFICATION_URI, params, verify ->{
 			    	
-			    	if(verify.failed())
-			    		LOGGER.error(verify.cause().getMessage());
+			    	if(verify.failed()){
+			    		LOGGER.error("[HandleGoogleCallback]Access token verification error: " + verify.cause().getMessage());
+			    		ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
+			    	}
 			    	
 			    	else{
 			    		
-			    		LOGGER.debug("Token verification result: " + verify.result());
+			    		LOGGER.debug("[HandleGoogleCallback]Token verification result: " + verify.result());
 			    		JsonObject result = verify.result();
 			    		
 			    		ctx.setUser(token);
+			    		
 			    		String email = result.getString("email");
-			    		ctx.session().put("email", email );
+			    		String externalId = result.getString("sub");
+			    		LOGGER.debug("email: " + email + ", external id: " + externalId);
 			    		
-			    		LOGGER.debug("User ID: " + result.getString("sub"));
+			    		JsonObject meParams = new JsonObject().put("access_token", accessToken);
 			    		
+			    		oauth2.api(HttpMethod.GET, GOOGLE_USER_PROFILE_URI.replace("{userId}", externalId), meParams, Sync.fiberHandler(me ->{
+			    			
+			    			if(me.failed()){
+			    				LOGGER.error("[HandleGoogleCallback]Retrieving user profile failed : " + me.cause().getMessage());
+			    				ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
+			    			}
+			    			
+			    			else{
+			    				
+			    				String username = me.result().getString("displayName");
+			    				String photoUrl = me.result().getJsonObject("image").getString("url");
+			    				String firstName = me.result().getJsonObject("name").getString("givenName");
+			    				String lastName = me.result().getJsonObject("name").getString("familyName");
+			    				String gender = me.result().getString("gender");
+			    				
+			    				LOGGER.debug("[HandleGoogleCallback]Retrieved google user info: " + externalId + ", " + email + ", "+ username + ", " + firstName + ", " + lastName + ", " + photoUrl + ", " + gender);
+			    				
+			    				// Social sign up
+			    				
+			    				JsonObject socialSignUpRequest = new JsonObject()
+			    													.put("email", email)
+			    													.put("username",username)
+			    													.put("firstName", firstName)
+			    													.put("lastName", lastName)
+			    													.put("photoUrl", photoUrl)
+			    													.put("gender", gender)
+			    													.put("externalId", externalId)
+			    													.put("socialProvider", "google");
+			    				
+								DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.SOCIAL_SIGN_UP.toString());
+			    				Message<JsonObject> signUpResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),socialSignUpRequest,options,h));
+			    				
+			    				LOGGER.debug("[HandleGoogleCallback]Social sign up successful, user profile: " + signUpResult.body());
+			    				
+			    				ctx.session().put("userProfile", signUpResult.body());
+			    				doRedirect(ctx.request().response(), "/");
+			    			}
+			    		}));
 			    	}
-			    	
-			    	doRedirect(ctx.request().response(), "/");
 			    });
-			    
-			    
-			    /*
-			    try {
-					GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(GoogleNetHttpTransport.newTrustedTransport(), JacksonFactory.getDefaultInstance())
-							.setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
-							.build();
-					
-					GoogleIdToken idToken = verifier.verify(token.principal().getString("id_token"));
-					
-					if (idToken != null) {
-						  Payload payload = idToken.getPayload();
-
-						  // Print user identifier
-						  String userId = payload.getSubject();
-						  LOGGER.debug("User ID: " + userId);
-
-						  // Get profile information from payload
-						  String email = payload.getEmail();
-						  LOGGER.debug("email:"+email);
-						  boolean emailVerified = Boolean.valueOf(payload.getEmailVerified());
-						  String name = (String) payload.get("name");
-						  LOGGER.debug("name:"+name);
-						  String pictureUrl = (String) payload.get("picture");
-						  LOGGER.debug("pictureUrl:"+pictureUrl);
-						  String locale = (String) payload.get("locale");
-						  LOGGER.debug("locale:"+locale);
-						  String familyName = (String) payload.get("family_name");
-						  LOGGER.debug("familyName:"+familyName);
-						  String givenName = (String) payload.get("given_name");
-						  LOGGER.debug("givenName:"+givenName);
-						  // Use or store profile information
-						  // ...
-
-						  
-						  ctx.session().put("email", email);
-						  doRedirect(ctx.request().response(), "/");
-						  
-						  
-						} else {
-							LOGGER.error("Invalid ID token.");
-						}
-					
-					
-				} catch (GeneralSecurityException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-				*/
-				
 			  }
 			});
 	}
@@ -458,14 +467,14 @@ public class HttpServerVerticle extends AbstractVerticle {
 	
 	private void handleFacebookCallback(RoutingContext ctx){
 		
-		LOGGER.debug("received facebook call back with Authorization Code.");
+		LOGGER.debug("[HandleFacebookCallback]Received facebook call back with Authorization Code.");
 		
 		LOGGER.debug(ctx.request().absoluteURI());
 
 		if(ctx.request().getParam("error")!=null){
 			
 			LOGGER.error("ERROR:" + ctx.request().getParam("error_reason"));
-			doRedirect(ctx.response(), "/");
+			ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
 			return;
 			
 		}
@@ -474,7 +483,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 		
 		JsonObject tokenConfig = new JsonObject()
 			    .put("code", facebookAuthCode)
-			    .put("redirect_uri", "https://localhost:8080/facebookauth2callback");
+			    .put("redirect_uri", FACEBOOK_REDIRECT_URI);
 		
 		OAuth2Auth oauth2 = FacebookAuth.create(vertx, FACEBOOK_APP_ID, FACEBOOK_APP_SECRET);
 		
@@ -483,52 +492,75 @@ public class HttpServerVerticle extends AbstractVerticle {
 			
 			  if (res.failed()) {
 				  
-			    LOGGER.error("Access Token Error: " + res.cause().getMessage());
-			    doRedirect(ctx.request().response(), "/");
+			    LOGGER.error("[HandleFacebookCallback]Access token retrieval error: " + res.cause().getMessage());
+			    ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
 			    
 			  } else {
 				  
 			    AccessToken token = res.result();
 			    
-			    LOGGER.debug("Received token : " + token.principal());
+			    LOGGER.debug("[HandleFacebookCallback]Received token : " + token.principal());
 			    
 			    String accessToken = token.principal().getString("access_token");
 			    
 			    //Verify access token
 			    JsonObject params = new JsonObject().put("input_token",accessToken).put("access_token", FACEBOOK_APP_ID+"|"+FACEBOOK_APP_SECRET);
-			    oauth2.api(HttpMethod.GET, "https://graph.facebook.com/debug_token?", params, verify ->{
+			    oauth2.api(HttpMethod.GET, FACEBOOK_DEBUG_TOKEN_URI, params, verify ->{
 			    	
 			    	if(verify.failed()){
 			    		
-			    		LOGGER.error(verify.cause().getMessage());
-			    		doRedirect(ctx.request().response(), "/");
+			    		LOGGER.error("[HandleFacebookCallback]Access token verification error: " + verify.cause().getMessage());
+			    		ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
 			    	}
 			    		
 			    	else{
 			    		
-			    		LOGGER.debug("Verification result: " + verify.result());
+			    		LOGGER.debug("[HandleFacebookCallback]Verification result: " + verify.result());
 			    		
 			    		ctx.setUser(token);
 			    		
-			    		JsonObject meParams = new JsonObject().put("fields","id,name,email,picture").put("access_token", accessToken);
+			    		JsonObject meParams = new JsonObject().put("fields","id,name,email,picture,first_name,last_name,gender").put("access_token", accessToken);
 			    		
-			    		oauth2.api(HttpMethod.GET, "https://graph.facebook.com/me?", meParams, me ->{
+			    		oauth2.api(HttpMethod.GET, FACEBOOK_USER_PROFILE_URI, meParams, Sync.fiberHandler(me ->{
 			    			
 			    			if(me.failed()){
-			    				LOGGER.error("Retrieving user profile failed : " + me.cause().getMessage());
-			    				doRedirect(ctx.request().response(), "/");
+			    				LOGGER.error("[HandleFacebookCallback]Retrieving user profile failed : " + me.cause().getMessage());
+			    				ctx.fail(FailureCode.SOCIAL_LOGIN_ERROR.getCode());
 			    				return;
 			    			}
 			    			
 			    			else{
+			    				String externalId = me.result().getString("id");
 			    				String email = me.result().getString("email");
-			    				String fullname = me.result().getString("name");
+			    				String username = me.result().getString("name");
+			    				String photoUrl = me.result().getJsonObject("picture").getJsonObject("data").getString("url");
+			    				String firstName = me.result().getString("first_name");
+			    				String lastName = me.result().getString("last_name");
+			    				String gender = me.result().getString("gender");
 			    				
-			    				LOGGER.debug("email:" + email);
-			    				ctx.session().put("email", email);
+			    				LOGGER.debug("[HandleFacebookCallback]Retrieved facebook user info: " + externalId + ", " + email + ", "+ username + ", " + firstName + ", " + lastName + ", " + photoUrl + ", " + gender);
+			    				
+			    				// Social sign up
+			    				
+			    				JsonObject socialSignUpRequest = new JsonObject()
+			    													.put("email", email)
+			    													.put("username",username)
+			    													.put("firstName", firstName)
+			    													.put("lastName", lastName)
+			    													.put("photoUrl", photoUrl)
+			    													.put("gender", gender)
+			    													.put("externalId", externalId)
+			    													.put("socialProvider", "facebook");
+			    				
+								DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.SOCIAL_SIGN_UP.toString());
+			    				Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),socialSignUpRequest,options,h));
+			    				
+			    				LOGGER.debug("[HandleFacebookCallback]Social sign up successful, user profile: " + result.body());
+			    				
+			    				ctx.session().put("userProfile", result.body());
 			    				doRedirect(ctx.request().response(), "/");
 			    			}
-			    		});
+			    		}));
 			    	}
 			    });
 			  }
@@ -567,7 +599,9 @@ public class HttpServerVerticle extends AbstractVerticle {
 						ReplyException exception = (ReplyException) reply.cause();
 						ctx.fail(exception.failureCode());
 					} else {
-						LOGGER.info(reply.result().body().toString());
+						
+						JsonObject userProfile = (JsonObject)reply.result().body();
+						LOGGER.info("[handleSignUp]User profile created: " + userProfile);
 
 						JsonObject authInfo = new JsonObject().put("username", ctx.request().getParam("signup_email"))
 								.put("password", ctx.request().getParam("signup_password"));
@@ -578,7 +612,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 							if (res.succeeded()) {
 								User user = res.result();
 								ctx.setUser(user);
-								ctx.session().put("email", user.principal().getString("username"));
+								ctx.session().put("userProfile", userProfile);
 								ctx.response().putHeader("location", "/").setStatusCode(303).end();
 
 							} else {
@@ -631,61 +665,27 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 */
 
 	private void handleHomePage(RoutingContext ctx) {
-		LOGGER.debug("requesting home page /");
+		LOGGER.debug("[handleHomePage]Requesting home page /");
 
-		LOGGER.debug("auth user with principal: " + ctx.user().principal());
+		LOGGER.debug("[handleHomePage]Auth user with principal: " + ctx.user().principal());
 		
 
-		JsonObject sessionUser = ctx.session().get("user");
+		JsonObject userProfile = ctx.session().get("userProfile");
 				
-		LOGGER.debug("session user : " + sessionUser );
+		LOGGER.debug("[handleHomePage]User profile: " + userProfile);
 		
-		// Check if user is stored in session. If not, retrieve user from db
-		if(sessionUser==null || sessionUser.isEmpty() ){
+		// if user profile is not stored in the session, redirect to login page
+		if(userProfile==null || userProfile.isEmpty()){
 			
-			JsonObject findUserRequest = new JsonObject();
+			ctx.clearUser();
+			doRedirect(ctx.response(), "/");
 			
-			if(ctx.session().get("uid")!=null)
-				findUserRequest.put("uid", (String)ctx.session().get("uid"));
-			else if(ctx.session().get("email")!=null)
-				findUserRequest.put("email", (String)ctx.session().get("email"));
-			else{
-				LOGGER.error("no user key is found in the session for retrieving user from db.");
-				ctx.fail(403);
-				return;
-			}
-			
-			DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.FIND_USER.toString());
-			LOGGER.info("[handleHomePage]Calling user manager FIND_USER with findUserRequest: " + findUserRequest);
-			vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(), findUserRequest, options, reply -> {
-	
-				if (reply.failed()) {
-					LOGGER.error("[handleHomePage]Finding user failed with error:  " + reply.cause());
-					ctx.fail((ReplyException)reply.cause());
-				} 
-				else {
-					JsonObject user = (JsonObject)reply.result().body();
-					if(user.isEmpty()){
-						
-						//It means, user is authenticated with login data or cookie, but user is not found in db.  
-						//TODO how to handle this scenario?
-						renderHandlebarsPage(ctx, "login");
-					}
-					
-					else{
-						LOGGER.info("[handleHomePage]Adding user into session");
-						ctx.session().put("user",user);
-						ctx.put("fullname", user.getString("FULLNAME"));
-						ctx.put("page_title", "My Notes - Home");	
-						renderHandlebarsPage(ctx, "home");
-					}
-				}
-			});
 		}
-		
+			
 		else {
 
-			ctx.put("fullname", sessionUser.getString("FULLNAME"));
+			ctx.put("username", userProfile.getString("USERNAME"));
+			ctx.put("photoUrl", userProfile.getString("PHOTO_URL"));
 			ctx.put("page_title", "My Notes - Home");	
 			renderHandlebarsPage(ctx, "home");
 		}
@@ -733,6 +733,12 @@ public class HttpServerVerticle extends AbstractVerticle {
 			renderHandlebarsPage(ctx, "login");
 			break;
 
+		case 806: //Socal login error
+			
+			ctx.put("social_login_failed", true);
+			renderHandlebarsPage(ctx, "login");
+			break;	
+			
 		case 901:
 			
 			ctx.put("error_message", "Database Error!");

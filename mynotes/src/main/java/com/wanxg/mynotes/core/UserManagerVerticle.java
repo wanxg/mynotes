@@ -53,6 +53,11 @@ public class UserManagerVerticle extends AbstractVerticle {
 				this.signUp(message);
 				break;
 				
+			case SOCIAL_SIGN_UP:
+				
+				this.socialSignUp(message);
+				break;	
+				
 			case REMEMBER_ME:
 
 				this.rememberMe(message);
@@ -62,6 +67,11 @@ public class UserManagerVerticle extends AbstractVerticle {
 
 				this.findUser(message);
 				break;
+				
+			case FIND_USER_PROFILE:
+
+				this.findUserProfile(message);
+				break;	
 				
 			case MANAGE_TOKEN:
 				
@@ -78,7 +88,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 	
 	/**
 	 * 
-	 * User action to sign up
+	 * User action to sign up, reply a new user profile
 	 * @param message
 	 */
 	@Suspendable
@@ -111,21 +121,23 @@ public class UserManagerVerticle extends AbstractVerticle {
 				
 				Message<String> userResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserRequest,optUser,h));
 				
-				String uid = userResult.body();
+				String userId = userResult.body();
 				
-				LOGGER.debug("[SIGN_UP]User has been created with id: " + uid);
+				LOGGER.debug("[SIGN_UP]User has been created with id: " + userId);
 				
 				DeliveryOptions optProfile = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_CREATE.toString());
 				JsonObject createUserProfileRequest = new JsonObject()
-						.put("uid", uid)
+						.put("userId", userId)
 						.put("email", email)
 						.put("username",username);
 				
-				Message<Integer> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,optProfile,h));
+				Message<JsonObject> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,optProfile,h));
 				
-				LOGGER.debug("[SIGN_UP]User profile has been created with id: " + profileResult.body());
+				JsonObject userProfile = profileResult.body();
 				
-				message.reply("User and its profile has been created");
+				LOGGER.debug("[SIGN_UP]User profile has been created: " + userProfile);
+				
+				message.reply(userProfile);
 				
 			}
 			else{
@@ -147,25 +159,135 @@ public class UserManagerVerticle extends AbstractVerticle {
 	
 	
 	/**
-	 * User action to log in with remember me option checked
+	 * 
+	 *  User action to sign up with external social login
+	 */
+	@Suspendable
+	private void socialSignUp(Message<JsonObject> message){
+		
+		String email = message.body().getString("email");
+		String username = message.body().getString("username");
+		String firstName = message.body().getString("firstName");
+		String lastName = message.body().getString("lastName");
+		String photoUrl = message.body().getString("photoUrl");
+		Integer gender =  "male".equals(message.body().getString("gender"))? 1:0;
+		String externalId = message.body().getString("externalId");
+		
+		try{
+			
+			// use the external id to find if the social user has been already signed up before.
+			DeliveryOptions findSocialUserOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.SOCIAL_USER_SELECT_BY_EXTERNAL_ID.toString());
+			JsonObject findSocialUserRequest = new JsonObject().put("externalId", externalId);
+			Message<JsonObject> queryResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), findSocialUserRequest,findSocialUserOptions,h));
+			
+			JsonObject socialUser = queryResult.body();
+			
+			if(!socialUser.isEmpty()){
+				
+				LOGGER.info("[SOCIAL_SIGN_UP]Social user has been already signed up with : " + socialUser);
+				
+				// use the latest user info to update social user stored in the db. 
+				// TODO: update user profile?
+				DeliveryOptions updateOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.SOCIAL_USER_UPDATE.toString());
+				JsonObject updateSocialUserRequest = new JsonObject()
+						.put("externalId", externalId)
+						.put("email", email)
+						.put("username",username)
+						.put("firstName",firstName)
+						.put("lastName",lastName)
+						.put("photoUrl",photoUrl)
+						.put("gender",gender);
+				Message<String> updateResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), updateSocialUserRequest,updateOptions,h));
+				
+				LOGGER.info("[SOCIAL_SIGN_UP]" + updateResult.body());
+				
+				// find the user profile
+				Integer profileId = socialUser.getInteger("PROFILE_ID");
+				DeliveryOptions findProfileOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_PROFILE_ID.toString());
+				JsonObject findProfileRequest = new JsonObject().put("pid", profileId);
+				Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), findProfileRequest,findProfileOptions,h));
+				JsonObject userProfile = result.body();
+				message.reply(userProfile);
+				
+			}
+			
+			else {
+				
+				// create a new user profile
+				DeliveryOptions profileOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_CREATE.toString());
+				JsonObject createUserProfileRequest = new JsonObject()
+						.put("email", email)
+						.put("username",username)
+						.put("firstName",firstName)
+						.put("lastName",lastName)
+						.put("photoUrl",photoUrl)
+						.put("gender",gender);
+				
+				Message<JsonObject> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,profileOptions,h));
+				
+				JsonObject userProfile = profileResult.body();
+				
+				LOGGER.info("[SOCIAL_SIGN_UP]User profile has been created: " + userProfile);
+				
+				Integer profileId = userProfile.getInteger("PID");
+				String socialProvider = message.body().getString("socialProvider");
+				
+				
+				// create a new social user record
+				DeliveryOptions socialOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.SOCIAL_USER_CREATE.toString());
+				
+				JsonObject createSocialUserRequest = new JsonObject()
+						.put("profileId", profileId)
+						.put("socialProvider",socialProvider)
+						.put("externalId", externalId)
+						.put("email", email)
+						.put("username",username)
+						.put("firstName",firstName)
+						.put("lastName",lastName)
+						.put("photoUrl",photoUrl)
+						.put("gender",gender);
+				
+				Message<Integer> socialResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createSocialUserRequest,socialOptions,h));
+				
+				LOGGER.info("[SOCIAL_SIGN_UP]Social user has been created: " + socialResult.body());
+				message.reply(userProfile);
+			}
+		
+		} catch(Exception e){
+			
+			ReplyException re = (ReplyException)e.getCause();
+			LOGGER.warn("[SOCIAL_SIGN_UP]Social signing up failed: " + e.getMessage());
+			message.fail(re.failureCode(), e.getMessage());
+			
+		}
+		
+	}
+	
+	
+	
+	/**
+	 * User action to log in with remember me option checked, reply a new token id
 	 * 
 	 * @param message
 	 */
 	@Suspendable
 	private void rememberMe(Message<JsonObject> message){
 		
-		String email = message.body().getString("email");
+		String userId = message.body().getString("userId");
 		String clearToken = message.body().getString("auth_token");
 		Long validTo = message.body().getLong("valid_to");
 		
-		if(email==null || clearToken==null || validTo==null){
+		if(userId==null || clearToken==null || validTo==null){
 			message.fail(FailureCode.ILLEGAL_ARGUMENT.getCode(), "Illegal argument.");
 			return;
 		}
 		
+		
+		
+		
 		DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_CREATE.toString());
 		JsonObject createTokenRequest = new JsonObject();
-		createTokenRequest.put("email", email).put("auth_token", clearToken).put("valid_to", validTo);
+		createTokenRequest.put("userId", userId).put("auth_token", clearToken).put("valid_to", validTo);
 		
 		LOGGER.debug("[REMEMBER_ME]Creating token with tokenRequest: " + createTokenRequest);
 		
@@ -173,19 +295,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 			
 			Message<Integer> reply = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createTokenRequest,options,h));
 			String returnedTokenId = reply.body().toString();
-			
-			LOGGER.debug("[REMEMBER_ME]Token has been created and stored. Retrieving user.");
-			
-			DeliveryOptions opt = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_SELECT_BY_EMAIL.toString());
-			JsonObject userSelectReq = new JsonObject().put("email", email);
-			
-			Message<JsonObject> query = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), userSelectReq,opt,h));
-			JsonObject user = (JsonObject)query.body();
-			String uId = user.getString("UID");
-			
-			LOGGER.debug("[REMEMBER_ME]User has been retrieved : " + uId);
-			
-			message.reply(new JsonObject().put("user", user).put("token_id", returnedTokenId));
+			message.reply(returnedTokenId);
 		
 		}
 		
@@ -200,10 +310,11 @@ public class UserManagerVerticle extends AbstractVerticle {
 	}
 	
 	/**
-	 * User action to find user
+	 * User action to find user, reply the found user json object or an empty one
 	 * @param message
 	 */
 	
+	@Deprecated
 	private void findUser(Message<JsonObject> message){
 		
 		String email,userId;
@@ -251,6 +362,70 @@ public class UserManagerVerticle extends AbstractVerticle {
 		});
 	}
 	
+	
+	/**
+	 * 
+	 *  User action to find user profile with provided argument, reply a found user profile json object or an empty one
+	 * 
+	 */
+	
+	private void findUserProfile(Message<JsonObject> message){
+		
+		String email,userId;
+		Integer pid;
+		
+		DeliveryOptions options;
+		
+		JsonObject findUserProfileRequest = new JsonObject();
+		
+		if(message.body().getString("email")!=null){
+			email = message.body().getString("email");
+			options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_EMAIL.toString());
+			findUserProfileRequest.put("email", email);
+		}
+		
+		else if(message.body().getInteger("pid")!=null){
+			pid = message.body().getInteger("pid");
+			options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_PROFILE_ID.toString());
+			findUserProfileRequest = new JsonObject().put("pid", pid);
+		}
+		
+		else if(message.body().getString("userId")!=null){
+			userId = message.body().getString("userId");
+			options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_USER_ID.toString());
+			findUserProfileRequest = new JsonObject().put("userId", userId);
+		}
+		
+		else{
+			message.fail(FailureCode.ILLEGAL_ARGUMENT.getCode(), "Illegal argument.");
+			return;
+		}
+		
+		vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), findUserProfileRequest,options,reply->{
+			
+			if(reply.succeeded()){
+				
+				JsonObject userProfile = (JsonObject)reply.result().body();
+				boolean found = !userProfile.isEmpty();
+				LOGGER.info("[FIND_USER_PROFILE]User profile found? " + found);
+				
+				if(found)
+					message.reply(userProfile);
+				else
+					message.reply(new JsonObject());
+				
+			}
+			
+			else{
+				LOGGER.error("[FIND_USER_PROFILE]Finding user profile failed : " + reply.cause());
+				message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
+			}
+		});
+		
+		
+	}
+	
+	
 	/**
 	 *  User action to manage token, the sub-action defining the operation is provided in the header.
 	 * 
@@ -284,7 +459,7 @@ public class UserManagerVerticle extends AbstractVerticle {
 			case REISSUE_TOKEN:
 				
 				
-				String userHash = message.body().getString("uid");
+				String userId = message.body().getString("userId");
 				String clearToken = message.body().getString("auth_token");
 				Long validTo = message.body().getLong("valid_to");
 				
@@ -294,21 +469,13 @@ public class UserManagerVerticle extends AbstractVerticle {
 					Message<String> delete = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), deleteTokenRequest,options,h));
 					LOGGER.info("[REISSUE_TOKEN]" + delete.body());
 					
-					// Search for user with user hash
-					DeliveryOptions findOpt = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_SELECT_BY_UID.toString());
-					Message<JsonObject> find = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), new JsonObject().put("uid", userHash),findOpt,h));
-					
-					JsonObject user = find.body();
-					LOGGER.debug("[REISSUE_TOKEN]Returned user: " + user);
-					String email = find.body().getString("EMAIL");
-					
 					// Create a new token, return the new token id
 					DeliveryOptions createOpt = new DeliveryOptions().addHeader("db", DatabaseOperation.AUTH_TOKEN_CREATE.toString());
-					JsonObject createTokenRequest = new JsonObject().put("email", email).put("auth_token", clearToken).put("valid_to", validTo);
+					JsonObject createTokenRequest = new JsonObject().put("userId", userId).put("auth_token", clearToken).put("valid_to", validTo);
 					Message<Integer> newTokenId = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createTokenRequest,createOpt,h));
 					LOGGER.info("[REISSUE_TOKEN]A new token has been issue with id: " + newTokenId.body());
 					
-					message.reply(new JsonObject().put("user", user).put("token_id", newTokenId.body()));
+					message.reply(newTokenId.body());
 				}
 				
 				catch(Exception e){
