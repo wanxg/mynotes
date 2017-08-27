@@ -1,6 +1,8 @@
 package com.wanxg.mynotes.core;
 
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,8 +16,8 @@ import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.ReplyException;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-
 import io.vertx.ext.sync.Sync;
 
 public class UserManagerVerticle extends AbstractVerticle {
@@ -71,7 +73,17 @@ public class UserManagerVerticle extends AbstractVerticle {
 			case FIND_USER_PROFILE:
 
 				this.findUserProfile(message);
-				break;	
+				break;
+				
+			case MANAGE_LOCAL_USER:
+				
+				this.manageLocalUser(message);
+				break;
+			
+			case MANAGE_USER_PROFILE:
+				
+				this.manageUserProfile(message);
+				break;
 				
 			case MANAGE_TOKEN:
 				
@@ -97,6 +109,8 @@ public class UserManagerVerticle extends AbstractVerticle {
 		String email = message.body().getString("signup_email");
 		String username = message.body().getString("user_name");
 		String password = message.body().getString("signup_password");
+		Integer pid = message.body().getInteger("pid");
+		
 		
 		if(email==null || username==null || password==null){
 			message.fail(FailureCode.ILLEGAL_ARGUMENT.getCode(), "Illegal argument.");
@@ -125,19 +139,44 @@ public class UserManagerVerticle extends AbstractVerticle {
 				
 				LOGGER.debug("[SIGN_UP]User has been created with id: " + userId);
 				
-				DeliveryOptions optProfile = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_CREATE.toString());
-				JsonObject createUserProfileRequest = new JsonObject()
-						.put("userId", userId)
-						.put("email", email)
-						.put("username",username);
+				// Handle sign up request from axios in which user profile is already existing and to be linked with local user account
+				if(pid!=null){
 				
-				Message<JsonObject> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,optProfile,h));
+					DeliveryOptions opt = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_LINK_LOCAL_USER.toString());
+					JsonObject updateProfileRequest = new JsonObject().put("uid", userId).put("pid", pid);
+					
+					vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), updateProfileRequest, opt, reply -> {
+						
+						if (reply.succeeded()) {
+							JsonObject userProfile = (JsonObject)reply.result().body();
+							LOGGER.info("[SIGN_UP]User profile has been updated to: " + userProfile);
+							message.reply(userProfile);
+						}
+						else {
+							LOGGER.info("[SIGN_UP]Updating user profile failed : " + reply.cause());
+							message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
+						}
+					});
+					
+				}
 				
-				JsonObject userProfile = profileResult.body();
+				// Handle sign up request of form submit in which user profile is not yet existing
+				else {
 				
-				LOGGER.debug("[SIGN_UP]User profile has been created: " + userProfile);
-				
-				message.reply(userProfile);
+					DeliveryOptions optProfile = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_CREATE.toString());
+					JsonObject createUserProfileRequest = new JsonObject()
+							.put("userId", userId)
+							.put("email", email)
+							.put("username",username);
+					
+					Message<JsonObject> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,optProfile,h));
+					
+					JsonObject userProfile = profileResult.body();
+					
+					LOGGER.debug("[SIGN_UP]User profile has been created: " + userProfile);
+					
+					message.reply(userProfile);
+				}
 				
 			}
 			else{
@@ -213,21 +252,35 @@ public class UserManagerVerticle extends AbstractVerticle {
 			
 			else {
 				
-				// create a new user profile
-				DeliveryOptions profileOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_CREATE.toString());
-				JsonObject createUserProfileRequest = new JsonObject()
-						.put("email", email)
-						.put("username",username)
-						.put("firstName",firstName)
-						.put("lastName",lastName)
-						.put("photoUrl",photoUrl)
-						.put("gender",gender);
+				// check whether a profile is already created with the email
 				
-				Message<JsonObject> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,profileOptions,h));
+				DeliveryOptions findUserProfileoptions = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_SELECT_BY_EMAIL.toString());;
+				JsonObject findUserProfileRequest = new JsonObject().put("email", email);
+				Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), findUserProfileRequest,findUserProfileoptions,h));
+				JsonObject userProfile = result.body();
 				
-				JsonObject userProfile = profileResult.body();
+				if(userProfile.isEmpty()){
 				
-				LOGGER.info("[SOCIAL_SIGN_UP]User profile has been created: " + userProfile);
+					// create a new user profile
+					DeliveryOptions profileOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_CREATE.toString());
+					JsonObject createUserProfileRequest = new JsonObject()
+							.put("email", email)
+							.put("username",username)
+							.put("firstName",firstName)
+							.put("lastName",lastName)
+							.put("photoUrl",photoUrl)
+							.put("gender",gender);
+					
+					Message<JsonObject> profileResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), createUserProfileRequest,profileOptions,h));
+					
+					userProfile = profileResult.body();
+					
+					LOGGER.info("[SOCIAL_SIGN_UP]User profile has been created: " + userProfile);
+				
+				} else {
+					
+					LOGGER.info("[SOCIAL_SIGN_UP]A user profile is already created for this email: " + userProfile);
+				}
 				
 				Integer profileId = userProfile.getInteger("PID");
 				String socialProvider = message.body().getString("socialProvider");
@@ -409,8 +462,32 @@ public class UserManagerVerticle extends AbstractVerticle {
 				boolean found = !userProfile.isEmpty();
 				LOGGER.info("[FIND_USER_PROFILE]User profile found? " + found);
 				
-				if(found)
-					message.reply(userProfile);
+				if(found){
+					// Load social accounts of the profile
+					Boolean loadSocialAccounts = message.body().getBoolean("load_social_accounts");
+					if(Boolean.TRUE.equals(loadSocialAccounts)){
+						
+						DeliveryOptions loadSocialAcountsOptions = new DeliveryOptions().addHeader("db", DatabaseOperation.SOCIAL_USER_SELECT_BY_PROFILE_ID.toString());
+						vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), new JsonObject().put("pid", message.body().getInteger("pid")),loadSocialAcountsOptions,repl->{
+							
+							if(repl.succeeded()){
+								
+								JsonArray socialAccounts = (JsonArray)repl.result().body();
+								LOGGER.info("[FIND_USER_PROFILE]Found associated social accounts: " + socialAccounts.size());
+								userProfile.put("socialAccounts", socialAccounts);
+								message.reply(userProfile);
+							}
+							
+							else{
+								LOGGER.error("[FIND_USER_PROFILE]Loading social accounts failed : " + reply.cause());
+								message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
+							}
+							
+						});
+					}
+					else
+						message.reply(userProfile);
+				}
 				else
 					message.reply(new JsonObject());
 				
@@ -422,6 +499,94 @@ public class UserManagerVerticle extends AbstractVerticle {
 			}
 		});
 		
+	}
+	
+	
+	/**
+	 *  User action to manage user password, the sub-action defining the operation is provided in the header.
+	 *  
+	 *  @param message
+	 */
+	
+	private void manageLocalUser(Message<JsonObject> message){
+		
+		UserManagerAction subAction = UserManagerAction.valueOf(message.headers().get("sub_action"));
+		
+		switch (subAction) {
+		
+			case UPDATE_USER_PASSWORD:
+		
+				String uid = message.body().getString("uid");
+				String password = message.body().getString("password");
+				
+				DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_UPDATE_PASSWORD.toString());
+				JsonObject updatePasswordRequest = new JsonObject().put("uid", uid).put("password", password);
+				
+				vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), updatePasswordRequest, options, reply -> {
+					
+					if (reply.succeeded()) {
+						LOGGER.info("[UPDATE_USER_PASSWORD]" + reply.result().body().toString());
+						message.reply(reply.result().body().toString());
+					}
+					else {
+						LOGGER.info("[UPDATE_USER_PASSWORD]Updating user password failed : " + reply.cause());
+						message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
+					}
+				});
+				
+				break;
+			
+			default:
+		
+				message.fail(FailureCode.BAD_USER_SUB_ACTION.getCode(), "Bad user sub action: " + subAction);
+		}
+		
+	}
+	
+	
+	
+	/**
+	 *  User action to manage user profile, the sub-action defining the operation is provided in the header.
+	 *  
+	 *  @param message
+	 */
+	
+	private void manageUserProfile(Message<JsonObject> message){
+		
+		UserManagerAction subAction = UserManagerAction.valueOf(message.headers().get("sub_action"));
+		
+		switch (subAction) {
+		
+			case UPDATE_USER_PROFILE:
+		
+				String username = message.body().getString("username");
+				String firstName = message.body().getString("firstName");
+				String lastName = message.body().getString("lastName");
+				Integer gender = message.body().getInteger("gender");
+				Integer pid = message.body().getInteger("pid");
+				
+				DeliveryOptions options = new DeliveryOptions().addHeader("db", DatabaseOperation.USER_PROFILE_UPDATE.toString());
+				JsonObject updateProfileRequest = new JsonObject().put("username", username).put("firstName", firstName).put("lastName", lastName).put("gender", gender).put("pid", pid);
+				
+				vertx.eventBus().send(EventBusAddress.DB_QUEUE_ADDRESS.getAddress(), updateProfileRequest, options, reply -> {
+					
+					if (reply.succeeded()) {
+						JsonObject userProfile = (JsonObject)reply.result().body();
+						LOGGER.info("[UPDATE_USER_PROFILE]" + userProfile);
+						message.reply(userProfile);
+					}
+					else {
+						LOGGER.info("[UPDATE_USER_PROFILE]Updating token failed : " + reply.cause());
+						message.fail(((ReplyException)reply.cause()).failureCode(), reply.cause().getMessage());
+					}
+				});
+				
+				break;
+			
+			default:
+		
+				message.fail(FailureCode.BAD_USER_SUB_ACTION.getCode(), "Bad user sub action: " + subAction);
+		}
 		
 	}
 	

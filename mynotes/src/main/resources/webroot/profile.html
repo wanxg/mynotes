@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+	content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="description" content="">
+<meta name="author" content="">
+<meta name="google-signin-client_id"
+	content="700050092358-3il62628u6t9q2mu2h8ivb63dbtbde3h.apps.googleusercontent.com">
+<link rel="icon" href="pic/favicon.ico">
+
+<title>Test Profile</title>
+
+<!-- css -->
+<link href="https://localhost:8080/css/font-awesome.css" rel="stylesheet" type='text/css'>
+<link href="https://localhost:8080/css/bootstrap-social.css" rel="stylesheet" type='text/css'>
+<link href="https://localhost:8080/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://localhost:8080/css/croppie.css" rel="stylesheet">
+<link href="https://localhost:8080/css/mynotes.css" rel="stylesheet">
+<script src="https://localhost:8080/js/jquery-3.2.1.min.js"></script>
+<script src="https://localhost:8080/js/croppie.min.js"></script>
+
+</head>
+
+<body>
+
+	<nav class="navbar navbar-toggleable-md navbar-light bg-faded">
+	
+		<div class="container">
+
+			<button class="navbar-toggler navbar-toggler-right" type="button"
+				data-toggle="collapse" data-target="#navbarText"
+				aria-controls="navbarText" aria-expanded="false"
+				aria-label="Toggle navigation">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+	
+	
+			<a class="navbar-brand" href="/"> <img src="pic/brand.png"
+				alt="brand">
+			</a>
+	
+			<div class="navbar-collapse collapse" id="navbarText" aria-expanded="false">
+			
+				<ul class="navbar-nav mr-auto">
+					<li class="nav-item active"><a class="nav-link" href="home">
+							<span class="sr-only">(current)</span>
+					</a></li>
+					<li class="nav-item"><a class="nav-link" href="#"></a></li>
+					<li class="nav-item"><a class="nav-link" href="about"></a></li>
+				</ul>
+	
+				<form class="form-inline">
+					<input class="form-control mr-sm-2" type="text" placeholder="Search">
+					<button class="btn btn-outline-primary my-2 my-sm-0" type="submit">Search</button>
+				</form>
+	
+	
+				<ul class="nav navbar-nav navbar-right">
+					<li class="dropdown">
+						<img class="dropdown-toggle" src="pic/avatar_boy_48.png" alt="dropdown image" data-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+						
+						<ul class="dropdown-menu">
+							<li class="nav-item dropdown-item">Signed in as Xiaolong</li>
+							<li class="dropdown-divider"></li>
+							<li class="nav-item"><a class="dropdown-item" href="/profile">Profile<span class="caret"></span></a></li>
+							<li class="nav-item"><a class="dropdown-item" href="/logout">Log out <span class="caret"></span></a></li>
+						</ul>
+					</li>
+				</ul>
+			</div>
+		
+		</div>
+	</nav>
+	
+	<style>
+	
+/* 		.row .col-7{
+		
+			margin-top:5em;
+			background: #eee;
+		}
+		
+		.row .col-2{
+			margin-top:5em;
+			background: #ddd;
+		}
+	
+		.row .col-3{
+			margin-top:5em;
+			background: #ddd;
+		}	 */	
+	
+	</style>
+	
+	<div id="profile-page" class="main-container">
+	
+		<div class="row">
+			
+			<div class="col-1"></div>
+			
+		
+  			<div class="col-1">
+  			
+  				<ul class="nav flex-column" role="tablist">
+				  <li class="nav-item">
+				    <a class="nav-link active" data-toggle="tab" href="#profile" role="tab">Profile</a>
+				  </li>
+				  <li class="nav-item">
+				    <a class="nav-link" data-toggle="tab" href="#account" role="tab">Account</a>
+				  </li>
+				</ul>
+  			
+  			</div>
+  			
+  			<div class="vertical-divide"></div>
+  			
+  			<div class="col-8" >
+  			
+  				<div class="tab-content">
+				
+				  <div class="tab-pane active" id="profile" role="tabpanel">
+				  
+				  	<div class="row justify-content-between">
+				  	
+					  	<form class="form-main col-6" style="background-color: #eee">
+							
+							<h1 class="display-4">Your profile</h1>
+					  		<hr class="my-3">
+							
+							<label for="email" class="col-form-label">Email</label>
+							<input class="form-control" type="email" value="bootstrap@example.com" id="email" disabled>
+							
+							
+							<label for="username" class="col-form-label">User name</label>
+							<input class="form-control" type="text" value="Wanxg" id="username" required>
+							
+							<label for="firstname" class="col-form-label">First name</label>
+							<input class="form-control" type="text" value="Xiaolong" id="firstname">
+							
+							
+							<label for="lastname" class="col-form-label">Last name</label>
+							<input class="form-control" type="text" value="Wan" id="lastname">
+							
+							<label for="lastname" class="col-form-label mr-5">Gender</label>
+							
+							<label class="custom-control custom-radio">
+							  <input id="radio1" name="radio" type="radio" class="custom-control-input" checked>
+							  <span class="custom-control-indicator"></span>
+							  <span class="custom-control-description">Female</span>
+							</label>
+							<label class="custom-control custom-radio">
+							  <input id="radio2" name="radio" type="radio" class="custom-control-input">
+							  <span class="custom-control-indicator"></span>
+							  <span class="custom-control-description">Male</span>
+							</label>
+							
+							<button type="submit" class="form-control btn btn-block btn-outline-primary margin-top-big">Update profile</button>
+							
+					  	</form>
+					  	
+					  	<form class="form-main col-3" style="background-color: #fff">
+					  	
+					  		<h1 class="display-5">Profile photo</h1>
+					  		<hr class="my-3">
+					  		
+					  		<div class="card">
+							  <!-- <img class="card-img-top" src="http://via.placeholder.com/150x150" alt="Card image cap"> -->
+							  <img class="card-img-top" src="https://lh5.googleusercontent.com/-5SDLlZJxC0M/AAAAAAAAAAI/AAAAAAAAAlE/jpeZYlKmreo/photo.jpg?sz=150" alt="Card image cap">
+							  <div class="card-block">
+							    <!-- <a href="#" class="btn btn-outline-primary">New photo</a> -->
+							    <label class="btn btn-outline-primary">
+								    New photo <input type="file" hidden>
+								</label>
+							  </div>
+							</div>
+							
+							
+					  	
+					  	</form>
+					  	
+					  	<div class="col-1" style="background-color: #eee"></div>
+					  
+					</div>
+				  	
+				  </div>
+				  
+				  
+				  <div class="tab-pane" id="account" role="tabpanel">
+				  
+				  	<div class="row justify-content-between">
+				  	
+<!-- 					  	<form class="form-main col-6" id="update_pwd_form" style="background-color: #eee" action="/account" method="post" v-on:submit.prevent="updatePassword">
+					  		 
+					  		<h1 class="display-4">Your local account</h1> 
+					  		<hr class="my-3">
+					  		
+					  		<div id="pwd_update_failed_div" v-if="pwd_update_failed" class="alert alert-danger alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								{{message}}
+							</div>
+					  		
+					  		<div id="pwd_update_success_div" v-if="pwd_update_success" class="alert alert-success alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								{{message}}
+							</div>
+					  		
+							<label for="old_password" class="col-form-label">Old password</label>
+							<input class="form-control" type="password" id="old_password" name="old_password" required autofocus>
+							
+							<label for="new_password" class="col-form-label">New password</label>
+							<input class="form-control" type="password" id="new_password" name="new_password" required>
+							
+							<label for="confirm_password" class="col-form-label">Confirm new password</label>
+							<input class="form-control" type="password" id="confirm_password" name="confirm_password" required>
+							
+							<button class="form-control btn btn-block btn-outline-primary margin-top-big" type="submit">Update password</button>
+							
+					  	</form> -->
+					  	
+					  	<form class="form-main col-6" id="signup_form" action="/signup" method="post" v-on:submit.prevent="signup">
+					  		
+					  		<div id="no_local_account_div" v-if="no_local_account" class="display-6 alert alert-warning" role="alert">You don't have local account yet</div>
+					  		
+					  		<div id="signup_failed_div" v-if="signup_failed" class="alert alert-danger alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								{{message}}
+							</div>
+					  		
+					  		<div id="signup_success_div" v-if="signup_success" class="alert alert-success alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								{{message}}
+							</div>
+					  		
+							<label for="user_name" class="col-form-label">User name</label>
+							<input type="text" id="user_name" class="form-control" name="user_name" value="{{userProfile.USERNAME}}" required> 
+							
+							<label for="signup_email" class="col-form-label">Email address</label>
+							<input type="email" id="signup_email" class="form-control" name="signup_email" value="{{userProfile.EMAIL}}" required>
+							
+							<label for="signup_password" class="col-form-label">Password</label> 
+							<input type="password" id="signup_password" class="form-control" name="signup_password" required autofocus>
+							
+							<button type="submit" class="form-control btn btn-block btn-outline-primary margin-top-big">Create local account</button>
+							
+					  	</form>
+					  	
+					</div>
+ 					 
+ 					 
+ 					<div class="mb-5"></div>
+					 
+ 					<div class="row justify-content-between">
+					 
+					 	<form class="form-main col-11" style="max-width: none;">
+					  		
+					  		<h1 class="display-4" style="margin-bottom: 1rem!important;">Your social accounts</h1>
+					  		
+							<table class="table table-striped">
+							  <!-- <thead>
+							    <tr>
+							      <th>Provider</th>
+							      <th>Username</th>
+							      <th>Photo</th>
+							    </tr>
+							  </thead> -->
+							  <tbody>
+							    <tr>
+							      <td>Facebook</td>
+							      <td>Otto</td>
+							      <td><img class="rounded" src="https://scontent.xx.fbcdn.net/v/t1.0-1/c25.4.632.632/s50x50/10379004_10203160469626105_8807407066494639880_n.jpg?oh=df9d087b92f2bd3699aaca40572448d3&amp;oe=5A297AC1" alt="profile photo" width="32" height="32"></td>
+							      <td>disconnected</td>
+							      <td><button type="button" class="btn btn-outline-primary btn-sm">Connect</button></td>
+							    </tr>
+							    <tr>
+							      <td>Google</td>
+							      <td>Thornton</td>
+							      <td><img class="image-radius" src="https://lh5.googleusercontent.com/-5SDLlZJxC0M/AAAAAAAAAAI/AAAAAAAAAlE/jpeZYlKmreo/photo.jpg?sz=50" alt="profile photo" width="32" height="32"></td>
+							      <td>connected</td>
+							      <td><button type="button" class="btn btn-outline-primary btn-sm">Disconnect</button></td>
+							    </tr>
+							  </tbody>
+							</table> 
+							
+					  	</form>
+					
+					</div>
+				  
+				  </div>
+				
+				</div>
+  			
+  			</div>
+		</div>
+		
+	</div>
+	
+	<!-- Bootstrap core JavaScript
+    ================================================== -->
+	<script src="https://localhost:8080/js/tether.min.js"></script>
+	<script src="https://localhost:8080/js/bootstrap.min.js"></script>
+	
+	
+	<script src="https://localhost:8080/js/axios.min.js"></script>
+	<script src="https://localhost:8080/js/vue.min.js"></script>
+	<script src="https://localhost:8080/js/Profile.js"></script>
+	
+	
+	<!-- Placed at the end of the document so the pages load faster -->
+	<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+	<script src="https://localhost:8080/js/ie10-viewport-bug-workaround.js"></script>
+	
+</body>
+</html>

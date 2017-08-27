@@ -1,4 +1,33 @@
-{{>header.hbs}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="description" content="">
+<meta name="author" content="">
+<meta name="google-signin-client_id" content="700050092358-3il62628u6t9q2mu2h8ivb63dbtbde3h.apps.googleusercontent.com">
+<link rel="icon" href="pic/favicon.ico">
+
+<title>{{page_title}}</title>
+
+<!-- css -->
+<link href="https://localhost:8080/css/font-awesome.css" rel="stylesheet" type='text/css'>
+<link href="https://localhost:8080/css/bootstrap-social.css" rel="stylesheet" type='text/css'>
+<link href="https://localhost:8080/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://localhost:8080/css/mynotes.css" rel="stylesheet">
+<script>
+if (window.location.href.indexOf('#_=_') > 0) {
+    window.location = window.location.href.replace(/#.*/, '');
+}
+
+else if (window.location.href.indexOf('#') > 0) {
+    window.location = window.location.href.replace(/#/, '');
+}
+</script>
+</head>
+
+<body>
+
 
 <div id="login-page" class="login-view">
 
@@ -31,22 +60,22 @@
 			<div class="col-6">
 
 				<ul class="nav nav-tabs" id="login_signup_tab" role="tablist">
-					<li class="nav-item"><a class="nav-link {{#unless signup_failed}}active{{/unless}}" data-toggle="tab" href="#login" role="tab">Log in</a></li>
-					<li class="nav-item"><a class="nav-link {{#if signup_failed}}active{{/if}}" data-toggle="tab" href="#signup" role="tab">Sign up</a></li>
+					<li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#login" role="tab">Log in</a></li>
+					<li class="nav-item"><a class="nav-link" data-toggle="tab" href="#signup" role="tab">Sign up</a></li>
 				</ul>
 
 				<div class="tab-content">
-					<div id="login" class="tab-pane fade {{#unless signup_failed}}show active{{/unless}}">
+					<div id="login" class="tab-pane fade show active">
 						
 						<form id="login_form" class="form-signin" action="/login" method="post" v-on:submit.prevent="login">
 
 							<h2 class="form-signin-heading">Please log in</h2>
-
+							
 							<div id="login_failed_div" v-if="login_failed" class="alert alert-danger alert-dismissible fade show" role="alert">
 								<button type="button" class="close" data-hide="alert" aria-label="Close">
 									<span aria-hidden="true">&times;</span>
 								</button>
-								\{{message}} <a href="#" class="alert-link">Forgotten password?</a>
+								{{message}} <a href="#" class="alert-link">Forgot password?</a>
 							</div>
 							
 							<label for="login_email" class="sr-only">Email address</label>
@@ -80,14 +109,6 @@
 						
 						<div class="form-signin">
 							
-							{{#if social_login_failed}}
-							<div class="alert alert-danger alert-dismissible fade show" role="alert">
-								<button type="button" class="close" data-dismiss="alert" aria-label="Close">
-									<span aria-hidden="true">&times;</span>
-								</button>
-								Social login failed, please try later.
-							</div>
-							{{/if}} 
 							
 							<a href="/googlelogin" class="btn btn-outline-primary  btn-social-icon btn-google" title="Sign in with Google">
 	   							 <span class="fa fa-google"></span>
@@ -101,7 +122,7 @@
 						
 					</div>
 
-					<div id="signup" class="tab-pane fade {{#if signup_failed}}show active{{/if}}">
+					<div id="signup" class="tab-pane fade">
 					
 						<form id="signup_form" class="form-signin" action="/signup" method="post" v-on:submit.prevent="signup">
 							<h2 class="form-signin-heading">Please sign up</h2>
@@ -110,9 +131,9 @@
 								<button type="button" class="close" data-hide="alert" aria-label="Close">
 									<span aria-hidden="true">&times;</span>
 								</button>
-								\{{message}}
+								{{message}}
 							</div>
-
+							
 							<label for="userName" class="sr-only">Username</label> 
 							
 							<input type="text" id="user_name" class="form-control" name="user_name" placeholder="User name" required autofocus> 
@@ -129,14 +150,6 @@
 							
 							<input type="password" id="signup_password" class="form-control" name="signup_password" placeholder="Password" required>
 
-							<!-- 
-									<div class="file-tab panel-body">
-										<label class="btn btn-outline-primary btn-file">
-											<i class="fa fa-camera fa-2x" aria-hidden="true"></i>
-											<input type="file" style="display:none;">
-										</label>
-									</div>
-									 -->
 							<button class="btn btn-outline-primary btn-block margin-top-big" type="submit">Sign up</button>
 
 						</form>
@@ -152,4 +165,41 @@
 
 </div>
 
-{{>footer.hbs}}
+<script>
+	var email = document.getElementById("signup_email");
+	var reemail = document.getElementById("signup_reemail");
+
+	function validateEmail() {
+		if (email.value != reemail.value) {
+			reemail.setCustomValidity("Emails don't match.");
+		} else {
+			reemail.setCustomValidity('');
+		}
+	}
+
+	email.onchange = validateEmail;
+	reemail.onkeyup = validateEmail;
+	
+</script>
+
+	<!-- Bootstrap core JavaScript
+    ================================================== -->
+	<script src="https://localhost:8080/js/tether.min.js"></script>
+	<script src="https://localhost:8080/js/jquery-3.2.1.min.js"></script>
+	<script src="https://localhost:8080/js/bootstrap.min.js"></script>
+	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://unpkg.com/vue"></script>
+	<script src="https://localhost:8080/js/Login.js"></script>
+	
+	
+
+	<!-- Placed at the end of the document so the pages load faster -->
+	<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+	<script src="https://localhost:8080/js/ie10-viewport-bug-workaround.js"></script>
+	
+	
+	
+</body>
+</html>
+
+

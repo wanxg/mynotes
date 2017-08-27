@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+	content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="description" content="">
+<meta name="author" content="">
+<meta name="google-signin-client_id"
+	content="700050092358-3il62628u6t9q2mu2h8ivb63dbtbde3h.apps.googleusercontent.com">
+<link rel="icon" href="pic/favicon.ico">
+
+<title>Test Home</title>
+
+<!-- css -->
+<link href="https://localhost:8080/css/font-awesome.css"
+	rel="stylesheet" type='text/css'>
+<link href="https://localhost:8080/css/bootstrap-social.css"
+	rel="stylesheet" type='text/css'>
+<link href="https://localhost:8080/css/bootstrap.min.css"
+	rel="stylesheet">
+<link href="https://localhost:8080/css/mynotes.css" rel="stylesheet">
+
+<link href="https://localhost:8080/css/croppie.css" rel="stylesheet">
+
+<script src="https://localhost:8080/js/jquery-3.2.1.min.js"></script>
+<script src="https://localhost:8080/js/croppie.min.js"></script>
+
+
+</head>
+
+<body>
+
+	<nav class="navbar navbar-toggleable-md navbar-light bg-faded">
+	
+		<div class="container">
+
+			<button class="navbar-toggler navbar-toggler-right" type="button"
+				data-toggle="collapse" data-target="#navbarText"
+				aria-controls="navbarText" aria-expanded="false"
+				aria-label="Toggle navigation">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+	
+	
+			<a class="navbar-brand" href="/"> <img src="pic/brand.png" alt="brand">
+			</a>
+	
+			<div class="navbar-collapse collapse" id="navbarText" aria-expanded="false">
+				<ul class="navbar-nav mr-auto">
+					<li class="nav-item active"><a class="nav-link" href="home">
+							<span class="sr-only">(current)</span>
+					</a></li>
+					<li class="nav-item"><a class="nav-link" href="#"></a></li>
+					<li class="nav-item"><a class="nav-link" href="about"></a></li>
+				</ul>
+	
+				<form class="form-inline">
+					<input class="form-control mr-sm-2" type="text" placeholder="Search">
+					<button class="btn btn-outline-primary my-2 my-sm-0" type="submit">Search</button>
+				</form>
+	
+	
+				<ul class="nav navbar-nav navbar-right">
+					<li class="dropdown">
+						<img class="dropdown-toggle" src="pic/avatar_boy_48.png" alt="dropdown image" data-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+						
+						<ul class="dropdown-menu">
+							<li class="nav-item dropdown-item">Signed in as Xiaolong</li>
+							<li class="dropdown-divider"></li>
+							<li class="nav-item"><a class="dropdown-item" href="/profile">Profile<span class="caret"></span></a></li>
+							<li class="nav-item"><a class="dropdown-item" href="/logout">Log out <span class="caret"></span></a></li>
+						</ul>
+					</li>
+				</ul>
+			</div>
+		
+		</div>
+
+	</nav>
+	
+	
+	
+	<div class="mb-5"></div>
+		
+	<div class="demo" style="width: 800px; height: 600px;"></div>
+		
+							<script>
+							
+								var basic = $('.demo').croppie({
+									
+									viewport: { width: 150, height: 150 },
+									
+									boundary: { width: 300, height: 300 },
+								    		
+								});
+								
+								
+								basic.croppie('bind', {
+								    url: 'https://lh5.googleusercontent.com/-5SDLlZJxC0M/AAAAAAAAAAI/AAAAAAAAAlE/jpeZYlKmreo/photo.jpg',
+								});
+							
+							</script>  
+	
+	
+
+	<!-- Bootstrap core JavaScript
+    ================================================== -->
+	<script src="https://localhost:8080/js/tether.min.js"></script>
+	<script src="https://localhost:8080/js/jquery-3.2.1.min.js"></script>
+	<script src="https://localhost:8080/js/bootstrap.min.js"></script>
+
+	<!-- Placed at the end of the document so the pages load faster -->
+	<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+	<script src="https://localhost:8080/js/ie10-viewport-bug-workaround.js"></script>
+</body>
+</html>

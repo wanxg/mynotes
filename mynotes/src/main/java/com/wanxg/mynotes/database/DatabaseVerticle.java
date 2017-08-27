@@ -1,9 +1,38 @@
 package com.wanxg.mynotes.database;
 
-import static com.wanxg.mynotes.database.DataBaseQueries.*;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_ALTER_TABLE_AUTH_TOKEN_ADD_CONSTRAINT_FOREIGN_KEY_UID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_ALTER_TABLE_SOCIAL_USER_ADD_CONSTRAINT_FOREIGN_KEY_PID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_ALTER_TABLE_USER_PROFILE_ADD_CONSTRAINT_FOREIGN_KEY_UID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_EMAIL;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_ALTER_TABLE_USER_ROLE_ADD_CONSTRAINT_FOREIGN_KEY_ROLE;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_CREATE_TABLE_AUTH_TOKEN;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_CREATE_TABLE_LOCAL_USER;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_CREATE_TABLE_ROLE_PERM;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_CREATE_TABLE_SOCIAL_USER;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_CREATE_TABLE_USER_PROFILE;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_CREATE_TABLE_USER_ROLE;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_INSERT_INTO_AUTH_TOKEN;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_INSERT_INTO_SOCIAL_USER;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_INSERT_INTO_USER;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_INSERT_INTO_USER_PROFILE;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_MAX_TOKEN_ID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_SOCIAL_USER_BY_EXTERNAL_ID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_SOCIAL_USER_BY_PROFILE_ID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_USER_BY_EMAIL;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_USER_BY_UID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_USER_PROFILE_BY_EMAIL;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_USER_PROFILE_BY_PROFILE_ID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_SELECT_USER_PROFILE_BY_USER_ID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_UPDATE_AUTH_TOKEN_SET_INVALID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_UPDATE_SOCIAL_USER;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_UPDATE_USER_PASSWORD;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_UPDATE_USER_PROFILE;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_UPDATE_USER_PROFILE_SET_UID;
+import static com.wanxg.mynotes.database.DataBaseQueries.SQL_UPDATE_USER_SET_ACTIVE;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -105,6 +134,10 @@ public class DatabaseVerticle extends AbstractVerticle {
 			this.updateUserActiveness(message);
 			break;
 
+		case USER_UPDATE_PASSWORD:
+			this.updateUserPassword(message);
+			break;
+			
 		case USER_SELECT_BY_EMAIL:
 
 			this.findUserByEmail(message);
@@ -118,6 +151,16 @@ public class DatabaseVerticle extends AbstractVerticle {
 		case USER_PROFILE_CREATE:
 			
 			this.createUserProfile(message);
+			break;
+			
+		case USER_PROFILE_UPDATE:
+			
+			this.updateUserProfile(message);
+			break;
+			
+		case USER_PROFILE_LINK_LOCAL_USER:
+			
+			this.linkUserProfileWithLocalUser(message);
 			break;
 			
 		case USER_PROFILE_SELECT_BY_USER_ID:
@@ -149,6 +192,11 @@ public class DatabaseVerticle extends AbstractVerticle {
 			
 			this.findSocialUserByExternalId(message);
 			break;
+
+		case SOCIAL_USER_SELECT_BY_PROFILE_ID:
+			
+			this.findSocialUserByProfileId(message);
+			break;	
 			
 		case AUTH_TOKEN_CREATE:
 
@@ -233,6 +281,43 @@ public class DatabaseVerticle extends AbstractVerticle {
 		}
 		
 	}
+	
+	
+	/**
+	 *  DB operation to update user password, reply an information message
+	 *  @param message
+	 */
+	@Suspendable
+	private void updateUserPassword(Message<JsonObject> message) {
+		
+		String uid = message.body().getString("uid");
+		String salt = authProvider.generateSalt();
+		String hash = authProvider.computeHash(message.body().getString("password"), salt);
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			 
+			UpdateResult create = Sync.awaitResult(h-> conn.updateWithParams(
+					SQL_UPDATE_USER_PASSWORD, new JsonArray()
+					.add(hash)
+					.add(salt)
+					.add(uid), h));
+			
+			if (create.getUpdated() != 0) {
+				LOGGER.info("[USER_UPDATE_PASSWORD]User's password has been updated.");
+				message.reply("User: " + uid +"'s password has been updated");
+			} else {
+				LOGGER.info("[USER_UPDATE_PASSWORD]User password update failed.");
+				message.fail(FailureCode.DB_ERROR.getCode(), "User password update failed.");
+			}
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_UPDATE_PASSWORD]User password update failed:" + e.getMessage());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	
 
 	/**
 	 * DB operation to find a user by email, reply a user json object which can be empty if the user is not found
@@ -304,7 +389,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 	
 	
 	/**
-	 * DB operation to create a new user profile, reply the profile id
+	 * DB operation to create a new user profile, reply the profile json object by calling findUserProfileByProfileId()
 	 * 
 	 * @param message
 	 */
@@ -354,6 +439,92 @@ public class DatabaseVerticle extends AbstractVerticle {
 		}
 		
 	}
+	
+	/**
+	 *  DB operation to update the profile, reply the updated profile json object by calling findUserProfileByProfileId()
+	 * 
+	 */
+
+	@Suspendable
+	private void updateUserProfile(Message<JsonObject> message) {
+		
+		//String email = message.body().getString("email");
+		String username = message.body().getString("username");
+		String firstName = message.body().getString("firstName");
+		String lastName = message.body().getString("lastName");
+		//String photoUrl = message.body().getString("photoUrl");
+		Integer gender = message.body().getInteger("gender");
+		Integer pid = message.body().getInteger("pid");
+		
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			
+			JsonArray params = new JsonArray();
+			
+			params.add(username);
+			if(firstName==null) params.addNull(); else params.add(firstName);
+			if(lastName==null) params.addNull(); else params.add(lastName);
+			if(gender==null) params.addNull(); else params.add(gender);
+			params.add(pid);
+			
+			UpdateResult result = Sync.awaitResult(h-> conn.updateWithParams(SQL_UPDATE_USER_PROFILE, params,h));
+			
+			if (result.getUpdated() != 0) {
+				
+				LOGGER.info("[USER_PROFILE_UPDATE]User profile has been updated.");
+				//message.reply(create.getKeys().getInteger(0));
+				message.body().put("pid", pid);
+				findUserProfileByProfileId(message);
+				
+			} else {
+				LOGGER.info("[USER_PROFILE_UPDATE]User profile upadte failed.");
+				message.fail(FailureCode.DB_ERROR.getCode(), "User profile update failed.");
+			}
+			
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_PROFILE_UPDATE]User profile update failed:" + e.getCause());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
+	
+	/**
+	 *  DB operation to link a local user with the profile , reply the updated profile json object by calling findUserProfileByProfileId()
+	 * 
+	 */
+
+	@Suspendable
+	private void linkUserProfileWithLocalUser(Message<JsonObject> message) {
+		
+		String user_id =  message.body().getString("uid");
+		Integer pid = message.body().getInteger("pid");
+		
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+				
+			UpdateResult result = Sync.awaitResult(h-> conn.updateWithParams(SQL_UPDATE_USER_PROFILE_SET_UID, new JsonArray().add(user_id).add(pid),h));
+			
+			if (result.getUpdated() != 0) {
+				
+				LOGGER.info("[USER_PROFILE_LINK_LOCAL_USER]User profile has been updated.");
+				message.body().put("pid", pid);
+				findUserProfileByProfileId(message);
+				
+			} else {
+				LOGGER.info("[USER_PROFILE_LINK_LOCAL_USER]User profile upadte failed.");
+				message.fail(FailureCode.DB_ERROR.getCode(), "User profile update failed.");
+			}
+			
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[USER_PROFILE_LINK_LOCAL_USER]User profile update failed:" + e.getCause());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+		
+	}
+	
 	
 	
 	/**
@@ -407,7 +578,7 @@ public class DatabaseVerticle extends AbstractVerticle {
 			LOGGER.debug("[USER_PROFILE_SELECT_BY_PROFILE_ID]Query successful");
 			LOGGER.info("[USER_PROFILE_SELECT_BY_PROFILE_ID]User profile found: " + query.getNumRows());
 			if (query.getNumRows() != 0) {
-					
+
 				LOGGER.debug(query.getRows().toString());
 				message.reply(query.getRows().get(0));
 			}
@@ -592,6 +763,41 @@ public class DatabaseVerticle extends AbstractVerticle {
 		} catch(Exception e){
 			LOGGER.error(printStackTrace(e));
 			LOGGER.error("[SOCIAL_USER_SELECT_BY_EXTERNAL_ID]Querying social user for external id " + externalId + " failed:" + e.getMessage());
+			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
+		}
+	}
+	
+	/**
+	 * 
+	 * DB operation to find a social user by its profile id
+	 * 
+	 * @param message
+	 */
+	@Suspendable
+	private void findSocialUserByProfileId(Message<JsonObject> message){
+		
+		Integer profileId = message.body().getInteger("pid");
+		
+		try (SQLConnection conn = Sync.awaitResult(dbClient::getConnection)) {
+			 
+			ResultSet query = Sync.awaitResult(h-> conn.queryWithParams(SQL_SELECT_SOCIAL_USER_BY_PROFILE_ID, new JsonArray().add(profileId), h));
+			
+			LOGGER.debug("[SOCIAL_USER_SELECT_BY_PROFILE_ID]Query successful");
+			LOGGER.info("[SOCIAL_USER_SELECT_BY_PROFILE_ID]Social user found: " + query.getNumRows());
+			
+			JsonArray socialUsers = new JsonArray();
+			
+			if (query.getNumRows() != 0) {
+				
+				LOGGER.debug(query.getRows().toString());
+				query.getRows().forEach(row -> socialUsers.add(row));
+			}
+			
+			message.reply(socialUsers);
+			
+		} catch(Exception e){
+			LOGGER.error(printStackTrace(e));
+			LOGGER.error("[SOCIAL_USER_SELECT_BY_PROFILE_ID]Querying social user for profile id " + profileId + " failed:" + e.getMessage());
 			message.fail(FailureCode.DB_ERROR.getCode(), e.getMessage());
 		}
 	}

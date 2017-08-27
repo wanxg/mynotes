@@ -21,6 +21,7 @@ import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
 import io.vertx.ext.auth.User;
@@ -42,7 +43,6 @@ import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.ext.web.handler.UserSessionHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.templ.HandlebarsTemplateEngine;
-import io.vertx.ext.web.templ.TemplateEngine;
 
 public class HttpServerVerticle extends AbstractVerticle {
 
@@ -63,8 +63,9 @@ public class HttpServerVerticle extends AbstractVerticle {
 	private static final String FACEBOOK_REDIRECT_URI="https://localhost:8080/facebookauth2callback";
 	private static final String FACEBOOK_DEBUG_TOKEN_URI="https://graph.facebook.com/debug_token?";
 	private static final String FACEBOOK_USER_PROFILE_URI="https://graph.facebook.com/me?";
+	private static final String FACEBOOK_USER_PROFILE_PIC_URI="https://graph.facebook.com/{userId}/picture?width=150&height=150";
 	
-	private final TemplateEngine engine = HandlebarsTemplateEngine.create();
+	private final HandlebarsTemplateEngine engine = HandlebarsTemplateEngine.create();
 
 	@Override
 	public void start(Future<Void> startFuture) throws Exception {
@@ -73,7 +74,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 
 		router.route().handler(CookieHandler.create());
 		router.route().handler(BodyHandler.create());
-		router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
+		router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)).setSessionTimeout(10*60*1000));
 
 		// A user session handler, so that the user is stored in the session between requests
 		router.route().handler(UserSessionHandler.create(DatabaseVerticle.authProvider));
@@ -82,6 +83,10 @@ public class HttpServerVerticle extends AbstractVerticle {
 		AuthHandler authHandler = RedirectAuthHandler.create(DatabaseVerticle.authProvider, "/login");
 
 		router.route("/").handler(authHandler);
+		router.get("/profile").handler(authHandler);
+		router.get("/account").handler(authHandler);
+		
+		
 
 		// handle log in
 		router.route("/login").handler(this::handleLogin);
@@ -105,6 +110,16 @@ public class HttpServerVerticle extends AbstractVerticle {
 		// handle home page after login
 		router.get("/").handler(this::handleHomePage);
 
+		// handle profile page
+		router.get("/profile").handler(Sync.fiberHandler(this::handleProfilePage));
+		
+		// handle http post request for updating profile
+		router.post("/profile").handler(Sync.fiberHandler(this::handleManageProfile));
+		
+		// handle http post request for updating local user password
+		router.post("/account").handler(Sync.fiberHandler(this::handleManageAccount));
+		
+		
 		// route for static resources
 		router.route().handler(StaticHandler.create().setCachingEnabled(false));
 
@@ -125,6 +140,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 					}
 
 				});
+		
 	}
 
 	/**
@@ -220,17 +236,31 @@ public class HttpServerVerticle extends AbstractVerticle {
 
 		// Login with user input
 		else if (ctx.request().method().equals(HttpMethod.POST)) {
+			
+			LOGGER.debug("[handleLogin]Received http post request on /login");
+			
+			JsonObject profile = ctx.session().get("userProfile");
+			
+			if(profile!=null){
+				doRedirect(ctx.response(), "/");
+				return;
+			}
 
-			LOGGER.debug("[handleLogin]Handling login form submit");
+			//String email = ctx.request().getFormAttribute("login_email");
+			//String password = ctx.request().getFormAttribute("login_password");
+			//boolean rememberMe = "remember_me".equals(ctx.request().getFormAttribute("remember_me"));
+			
+			String email = ctx.getBodyAsJson().getString("login_email");
+			String password = ctx.getBodyAsJson().getString("login_password");
+			boolean rememberMe = ctx.getBodyAsJson().getBoolean("remember_me");
 
-			String email = ctx.request().getFormAttribute("login_email");
-			String password = ctx.request().getFormAttribute("login_password");
-
-			boolean rememberMe = "remember_me".equals(ctx.request().getFormAttribute("remember_me"));
-
-			if (email == null || password == null) {
+			LOGGER.debug(email + ", " + password + ", " + rememberMe);
+			
+			
+			if (email == null || password == null || email.isEmpty() || password.isEmpty()) {
 				LOGGER.error("[handleLogin]No email or password provided in the form.");
-				ctx.fail(400);
+				//ctx.fail(400);
+				ctx.response().putHeader("content-type", "text/html").setStatusCode(400).end("No email or password provided!");
 			} else {
 
 				JsonObject authInfo = new JsonObject().put("username", email).put("password", password);
@@ -277,7 +307,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 											
 											LOGGER.warn("[handleLogin]Remember me request failed with error:  " + reply.cause());
 											LOGGER.warn("[handleLogin]Token will not be generated.");
-											doRedirect(ctx.request().response(), "/");
+											ctx.response().putHeader("content-type", "text/html").setStatusCode(400).end(reply.cause().getMessage());
 										}
 										
 										else{
@@ -298,18 +328,23 @@ public class HttpServerVerticle extends AbstractVerticle {
 										
 											LOGGER.info("[handleLogin]Token has bee stored, cookies are created. User login has been remembered. Setting user into session.");
 											
-											doRedirect(ctx.request().response(), "/");
+											ctx.response().putHeader("content-type", "text/html").end("Login OK!");
 										}
 									}
 							);
 						
 						} else {
 							// login without remember me
-							doRedirect(ctx.request().response(), "/");
+							LOGGER.debug("[handleLogin]Login OK without remember me.");
+							
+							ctx.response().putHeader("content-type", "text/html").end("Login OK!");
 						}
 					
 					} else {
-						ctx.fail(403); // Failed login
+						
+						LOGGER.debug("[handleLogin]Login failed due to invalid email or password.");
+						//ctx.fail(403); // Failed login
+						ctx.response().putHeader("content-type", "text/html").setStatusCode(403).end("Login failed!");
 					}
 				}));
 			}
@@ -404,6 +439,8 @@ public class HttpServerVerticle extends AbstractVerticle {
 			    				
 			    				String username = me.result().getString("displayName");
 			    				String photoUrl = me.result().getJsonObject("image").getString("url");
+			    				if(photoUrl.indexOf("sz=50")!=0)
+			    					photoUrl = photoUrl.replace("sz=50", "sz=150");
 			    				String firstName = me.result().getJsonObject("name").getString("givenName");
 			    				String lastName = me.result().getJsonObject("name").getString("familyName");
 			    				String gender = me.result().getString("gender");
@@ -420,7 +457,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 			    													.put("photoUrl", photoUrl)
 			    													.put("gender", gender)
 			    													.put("externalId", externalId)
-			    													.put("socialProvider", "google");
+			    													.put("socialProvider", "Google");
 			    				
 								DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.SOCIAL_SIGN_UP.toString());
 			    				Message<JsonObject> signUpResult = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),socialSignUpRequest,options,h));
@@ -436,8 +473,6 @@ public class HttpServerVerticle extends AbstractVerticle {
 			  }
 			});
 	}
-	
-	
 	
 	/**
 	 * 
@@ -533,7 +568,9 @@ public class HttpServerVerticle extends AbstractVerticle {
 			    				String externalId = me.result().getString("id");
 			    				String email = me.result().getString("email");
 			    				String username = me.result().getString("name");
-			    				String photoUrl = me.result().getJsonObject("picture").getJsonObject("data").getString("url");
+			    				//String photoUrl = me.result().getJsonObject("picture").getJsonObject("data").getString("url");
+			    				String photoUrl = FACEBOOK_USER_PROFILE_PIC_URI.replace("{userId}", externalId);
+			    				
 			    				String firstName = me.result().getString("first_name");
 			    				String lastName = me.result().getString("last_name");
 			    				String gender = me.result().getString("gender");
@@ -550,7 +587,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 			    													.put("photoUrl", photoUrl)
 			    													.put("gender", gender)
 			    													.put("externalId", externalId)
-			    													.put("socialProvider", "facebook");
+			    													.put("socialProvider", "Facebook");
 			    				
 								DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.SOCIAL_SIGN_UP.toString());
 			    				Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),socialSignUpRequest,options,h));
@@ -575,19 +612,42 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 */
 	private void handleSignUp(RoutingContext ctx) {
 
-		LOGGER.debug("received Form Submit: " + ctx.request().absoluteURI());
+		LOGGER.debug("[handleSignUp]Received http post request on: " + ctx.request().absoluteURI());
 
 		LOGGER.debug("received body: " + ctx.getBodyAsString());
 		LOGGER.debug("received headers: ");
 		ctx.request().headers().forEach(System.out::println);
+
+		JsonObject profile = ctx.session().get("userProfile");
+		
+		LOGGER.debug("user: " + ctx.user());
+		LOGGER.debug("profile: " + profile);
+		
+		Boolean isProfileCreated = ctx.getBodyAsJson().getBoolean("isProfileCreated");
+		
+		// when user has been logged in but session is expired
+		if(Boolean.TRUE.equals(isProfileCreated) && (profile==null || profile.isEmpty())){
+			ctx.clearUser();
+			LOGGER.info("[handleSignUp]Session expired.");
+			ctx.response().putHeader("content-type", "text/html").setStatusCode(401).end("Unauthorized request.");
+			return;
+		}
+		
+		String username = ctx.getBodyAsJson().getString("username");
+		String email = ctx.getBodyAsJson().getString("email");
+		String password = ctx.getBodyAsJson().getString("password");
+		
 		
 		JsonObject signUpRequest = new JsonObject();
 
-		signUpRequest.put("user_name", ctx.request().getParam("user_name"))
-				.put("signup_email", ctx.request().getParam("signup_email"))
-				.put("signup_password", ctx.request().getParam("signup_password"));
+		signUpRequest.put("user_name", username)
+				.put("signup_email", email)
+				.put("signup_password", password);
+				
+		if(profile!=null)
+			signUpRequest.put("pid",profile.getInteger("PID"));
 
-		LOGGER.debug("Calling user manager sign_up with signUpRequest: " + signUpRequest);
+		LOGGER.debug("[handleSignUp]Calling user manager sign_up with signUpRequest: " + signUpRequest);
 
 		DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.SIGN_UP.toString());
 
@@ -596,32 +656,44 @@ public class HttpServerVerticle extends AbstractVerticle {
 
 					if (reply.failed()) {
 						LOGGER.error("[handleSignUp] Sign up failed:  " + reply.cause());
-						ReplyException exception = (ReplyException) reply.cause();
-						ctx.fail(exception.failureCode());
+						//ReplyException exception = (ReplyException) reply.cause();
+						//ctx.fail(exception.failureCode());
+						ctx.response().putHeader("content-type", "text/html").setStatusCode(805).end("Signup failed!");
+						
 					} else {
 						
-						JsonObject userProfile = (JsonObject)reply.result().body();
-						LOGGER.info("[handleSignUp]User profile created: " + userProfile);
-
-						JsonObject authInfo = new JsonObject().put("username", ctx.request().getParam("signup_email"))
-								.put("password", ctx.request().getParam("signup_password"));
-
-						LOGGER.debug("authInfo: " + authInfo);
-
-						DatabaseVerticle.authProvider.setAuthenticationQuery(DataBaseQueries.AUTHENTICATE_QUERY_ON_LOCAL_USER).authenticate(authInfo, res -> {
-							if (res.succeeded()) {
-								User user = res.result();
-								ctx.setUser(user);
-								ctx.session().put("userProfile", userProfile);
-								ctx.response().putHeader("location", "/").setStatusCode(303).end();
-
-							} else {
-								
-								LOGGER.error("[handleSignUp]Login failed after signup : " + res.cause().getMessage());
-								ctx.fail(403);
-							}
-						});
-
+						if(profile!=null){
+							
+							JsonObject userProfile = (JsonObject)reply.result().body();
+							LOGGER.info("[handleSignUp]User profile updated to: " + userProfile);
+							ctx.response().putHeader("content-type", "text/html").end("Local user has been created and linked with current user profile.");
+						}
+						
+						else {
+							
+							JsonObject userProfile = (JsonObject)reply.result().body();
+							LOGGER.info("[handleSignUp]User profile created: " + userProfile);
+	
+							JsonObject authInfo = new JsonObject().put("username", email)
+									.put("password", password);
+	
+							LOGGER.debug("authInfo: " + authInfo);
+	
+							DatabaseVerticle.authProvider.setAuthenticationQuery(DataBaseQueries.AUTHENTICATE_QUERY_ON_LOCAL_USER).authenticate(authInfo, res -> {
+								if (res.succeeded()) {
+									User user = res.result();
+									ctx.setUser(user);
+									ctx.session().put("userProfile", userProfile);
+									
+									ctx.response().putHeader("content-type", "text/html").end("Signup OK!");
+	
+								} else {
+									
+									LOGGER.error("[handleSignUp]Login failed after signup : " + res.cause().getMessage());
+									ctx.response().putHeader("content-type", "text/html").setStatusCode(403).end("Signup failed!");
+								}
+							});
+						}
 					}
 
 				});
@@ -683,13 +755,192 @@ public class HttpServerVerticle extends AbstractVerticle {
 		}
 			
 		else {
-
-			ctx.put("username", userProfile.getString("USERNAME"));
-			ctx.put("photoUrl", userProfile.getString("PHOTO_URL"));
-			ctx.put("page_title", "My Notes - Home");	
+			ctx.put("userProfile", userProfile);
 			renderHandlebarsPage(ctx, "home");
 		}
 	}
+	
+	
+	
+	/**
+	 * Handle HTTP POST on /profile
+	 * 
+	 * @param ctx
+	 */
+	
+	private void handleManageProfile(RoutingContext ctx) {
+		
+		LOGGER.info("[handleManageProfile]Received http post request on /profile");
+		
+		JsonObject profile = ctx.session().get("userProfile");
+		
+		// when session is expired
+		if(profile==null || profile.isEmpty()){
+			ctx.clearUser();
+			LOGGER.info("[handleManageProfile]Session expired.");
+			ctx.response().putHeader("content-type", "text/html").setStatusCode(401).end("Unauthorized request.");
+			return;
+		}
+				
+		String action = ctx.getBodyAsJson().getString("action");
+		
+		if("update".equals(action)){
+			
+			Integer pid = profile.getInteger("PID");
+			/*
+			String username = ctx.request().getParam("username");
+			String firstName = ctx.request().getParam("firstname");
+			String lastName = ctx.request().getParam("lastname");
+			String radioGender = ctx.request().getParam("gender");
+			*/
+			
+			String username = ctx.getBodyAsJson().getString("username");
+			String firstName = ctx.getBodyAsJson().getString("firstname");
+			String lastName = ctx.getBodyAsJson().getString("lastname");
+			String radioGender = ctx.getBodyAsJson().getString("gender");
+			
+			
+			Integer gender;
+			
+			if("female".equals(radioGender))
+				gender = 0;
+			else if("male".equals(radioGender))
+				gender = 1;
+			else
+				gender = null;
+			
+			LOGGER.debug("[handleManageProfile]Received form values: " + username + ", " + firstName + ", " + lastName + ", " + gender + ", " + pid);
+			
+			//Updating user profile
+			
+			JsonObject updateUserProfileRequest = new JsonObject().put("username", username).put("firstName", firstName).put("lastName", lastName).put("gender", gender).put("pid", pid);
+			
+			DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.MANAGE_USER_PROFILE.toString()).addHeader("sub_action", UserManagerAction.UPDATE_USER_PROFILE.toString());
+			Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),updateUserProfileRequest,options,h));
+			JsonObject userProfile = result.body();
+			ctx.session().put("userProfile", userProfile);
+			ctx.response().putHeader("content-type", "text/html").end("User profile has been updated successfully.");
+			
+		}
+		
+		else
+			//ctx.fail(FailureCode.ILLEGAL_ARGUMENT.getCode());
+			ctx.response().putHeader("content-type", "text/html").setStatusCode(403).end("Illegal argument.");
+
+		//ctx.reroute(HttpMethod.GET, "/profile");
+		
+	}
+	
+	
+	
+	
+	/**
+	 * Handle HTTP GET on /profile
+	 * 
+	 * @param ctx
+	 */
+
+	private void handleProfilePage(RoutingContext ctx) {
+		LOGGER.info("[handleProfilePage]Requesting profile page /");
+
+		JsonObject profile = ctx.session().get("userProfile");
+		
+		if(profile==null || profile.isEmpty()){
+			ctx.clearUser();
+			doRedirect(ctx.response(), "/");
+			return;
+		}
+		
+		//Retrieving user profile
+		
+		JsonObject retrieveUserProfileRequest = new JsonObject().put("pid", profile.getInteger("PID")).put("load_social_accounts", true);
+		
+		DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.FIND_USER_PROFILE.toString());
+		Message<JsonObject> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),retrieveUserProfileRequest,options,h));
+		JsonObject userProfile = result.body();
+		
+		LOGGER.info("[handleProfilePage]Updating user profile in the session: " + userProfile);
+		
+		
+		LOGGER.debug("Total: " + userProfile.getJsonArray("socialAccounts").size());
+		
+		LOGGER.debug("Social accounts: " + userProfile.getJsonArray("socialAccounts"));
+		
+		
+		boolean isFemale = userProfile.getInteger("GENDER")!=null&&userProfile.getInteger("GENDER")==0? true : false;
+		boolean isMale = userProfile.getInteger("GENDER")!=null&&userProfile.getInteger("GENDER")==1? true : false;
+		userProfile.put("isFemale", isFemale);
+		userProfile.put("isMale", isMale);
+		
+		ctx.session().put("userProfile", userProfile);
+		ctx.put("userProfile", userProfile);
+		renderHandlebarsPage(ctx, "profile");
+		
+	}
+	
+	/**
+	 * 
+	 * Handle HTTP POST on /account
+	 * 
+	 * @param ctx
+	 */
+	
+	private void handleManageAccount(RoutingContext ctx){
+		
+		LOGGER.info("[handleManageAccount]Retrieved http post request on /account");
+		
+		JsonObject profile = ctx.session().get("userProfile");
+		
+		// when session is expired
+		if(profile==null || profile.isEmpty()){
+			ctx.clearUser();
+			ctx.response().putHeader("content-type", "text/html").setStatusCode(401).end("Unauthorized request.");
+			return;
+		}
+
+		String uid = profile.getString("USER_ID");
+		
+		LOGGER.debug(ctx.getBodyAsString());
+		
+		String oldPassword = ctx.getBodyAsJson().getString("old_password");
+		
+		LOGGER.debug("old password:" + oldPassword);
+		
+		String newPassword = ctx.getBodyAsJson().getString("new_password");
+		
+		LOGGER.debug("new password:" + newPassword);
+		
+		String email = profile.getString("EMAIL");
+		
+		JsonObject authInfo = new JsonObject().put("username", email).put("password", oldPassword);
+
+		LOGGER.debug("authInfo: " + authInfo);
+
+		DatabaseVerticle.authProvider.setAuthenticationQuery(DataBaseQueries.AUTHENTICATE_QUERY_ON_LOCAL_USER).authenticate(authInfo, Sync.fiberHandler(res -> {
+			if (res.succeeded()) {
+				
+				LOGGER.debug("[handleManageAccount]Old password is correct.");
+				
+				JsonObject updatePasswordRequest = new JsonObject().put("uid", uid).put("password", newPassword);
+				
+				DeliveryOptions options = new DeliveryOptions().addHeader("user", UserManagerAction.MANAGE_LOCAL_USER.toString()).addHeader("sub_action", UserManagerAction.UPDATE_USER_PASSWORD.toString());
+				
+				Message<String> result = Sync.awaitResult(h -> vertx.eventBus().send(EventBusAddress.USER_MANAGER_QUEUE_ADDRESS.getAddress(),updatePasswordRequest,options,h));
+		
+				ctx.response().putHeader("content-type", "text/html").end(result.body());
+				
+			} else {
+				
+				LOGGER.debug("[handleManageAccount]Old password invalid: " + res.cause().getMessage());
+				ctx.response().putHeader("content-type", "text/html").setStatusCode(403).end("Old password invalid.");
+			}
+		}));
+		
+		
+		
+		
+	}
+	
 
 	/**
 	 * Handle HTTP request failure for different status codes
@@ -732,6 +983,13 @@ public class HttpServerVerticle extends AbstractVerticle {
 			ctx.put("signup_failed", true);
 			renderHandlebarsPage(ctx, "login");
 			break;
+			
+		case 805: //ILLEGAL_ARGUMENT
+			
+			ctx.put("error_message", "Internal Server Error");
+			renderHandlebarsPage(ctx, "error");
+			break;	
+			
 
 		case 806: //Socal login error
 			
@@ -761,7 +1019,7 @@ public class HttpServerVerticle extends AbstractVerticle {
 	 */
 	private void renderHandlebarsPage(RoutingContext ctx, String page) {
 
-		ctx.put("page_title", "My Notes - " + page.substring(0, 1).toUpperCase() + page.substring(1));
+		ctx.put("page", page.substring(0, 1).toUpperCase() + page.substring(1));
 		engine.render(ctx, "templates/", "_" + page + ".hbs", res -> {
 			if (res.succeeded()) {
 				ctx.response().putHeader("Content-Type", "text/html");

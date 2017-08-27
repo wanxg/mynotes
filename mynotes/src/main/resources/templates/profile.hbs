@@ -1,0 +1,225 @@
+{{>header.hbs}}
+
+{{>navbar.hbs}}
+
+	<div id="profile-page" class="main-container">
+	
+		<div class="row">
+		
+			<div class="col-1"></div>
+		
+  			<div class="col-1">
+  			
+  				<ul class="nav flex-column" role="tablist">
+				  <li class="nav-item">
+				    <a class="nav-link active" data-toggle="tab" href="#profile" role="tab">Profile</a>
+				  </li>
+				  <li class="nav-item">
+				    <a class="nav-link" data-toggle="tab" href="#account" role="tab">Account</a>
+				  </li>
+				</ul>
+  			
+  			</div>
+  			
+  			<div class="vertical-divide"></div>
+  			
+  			<div class="col-8" >
+  			
+  				<div class="tab-content">
+				
+					  <div class="tab-pane active" id="profile" role="tabpanel">
+	
+						<div class="row justify-content-between">
+										  	
+						  	<form id="update_profile_form" class="form-main col-6" method="post" v-on:submit.prevent="updateProfile">
+								
+								<h1 class="display-4">Your profile</h1>
+						  		<hr class="my-3">
+								
+								<div id="profile_update_failed_div" v-if="profile_update_failed" class="alert alert-danger alert-dismissible fade show" role="alert">
+									<button type="button" class="close" data-hide="alert" aria-label="Close">
+										<span aria-hidden="true">&times;</span>
+									</button>
+									\{{message}}
+								</div>
+								
+								<div id="profile_update_success_div" v-if="profile_update_success" class="alert alert-success alert-dismissible fade show" role="alert">
+									<button type="button" class="close" data-hide="alert" aria-label="Close">
+										<span aria-hidden="true">&times;</span>
+									</button>
+									\{{message}}
+								</div>
+								
+								<label for="email" class="col-form-label">Email address</label>
+								<input class="form-control" type="email" value="{{userProfile.EMAIL}}" id="email" name="email" disabled>
+								
+								
+								<label for="username" class="col-form-label">User name</label>
+								<input class="form-control" type="text" value="{{userProfile.USERNAME}}" id="username" name="username" required autofocus>
+								
+								<label for="firstname" class="col-form-label">First name</label>
+								<input class="form-control" type="text" value="{{userProfile.FIRST_NAME}}" id="firstname" name="firstname">
+								
+								
+								<label for="lastname" class="col-form-label">Last name</label>
+								<input class="form-control" type="text" value="{{userProfile.LAST_NAME}}" id="lastname" name="lastname">
+								
+								<label for="lastname" class="col-form-label mr-5">Gender</label>
+								
+								<label class="custom-control custom-radio">
+								  <input id="radio1" type="radio" name="gender" value="female" class="custom-control-input" {{#if userProfile.isFemale}}checked{{/if}}>
+								  <span class="custom-control-indicator"></span>
+								  <span class="custom-control-description">Female</span>
+								</label>
+								<label class="custom-control custom-radio">
+								  <input id="radio2" type="radio" name="gender" value="male" class="custom-control-input" {{#if userProfile.isMale}}checked{{/if}}>
+								  <span class="custom-control-indicator"></span>
+								  <span class="custom-control-description">Male</span>
+								</label>
+								
+								<button type="submit" class="form-control btn btn-block btn-outline-primary margin-top-big">Update profile</button>
+								
+						  	</form>
+						  	
+						  	<form class="form-main col-3">
+							  
+							  	<h1 class="display-5">Profile photo</h1>
+						  		<hr class="my-3">
+							  		
+							  	<div class="card">
+									<img class="card-img-top rounded" src="{{userProfile.PHOTO_URL}}" alt="Card image cap" width="150" height="150">
+									<div class="card-block">
+									    <a href="#" class="btn btn-outline-primary">New photo</a>
+									</div>
+								</div>
+							  	
+							</form>
+							
+							<div class="col-1"></div>
+							
+						</div>
+					  	
+					  </div>
+				  
+				  
+				  	<div class="tab-pane" id="account" role="tabpanel">
+				  
+				  		<div class="row justify-content-between">
+				  
+				  
+				  		{{#if userProfile.USER_ID}}
+					  	<form id="update_pwd_form" class="form-main col-6" method="post" v-on:submit.prevent="updatePassword">
+					  		
+					  		<h1 class="display-4">Your local account</h1>
+					  		<hr class="my-3">
+					  		
+					  		<div id="pwd_update_failed_div" v-if="pwd_update_failed" class="alert alert-danger alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								\{{message}}
+							</div>
+							
+							<div id="pwd_update_success_div" v-if="pwd_update_success" class="alert alert-success alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								\{{message}}
+							</div>
+					  		
+							<label for="old_password" class="col-form-label">Old password</label>
+							<input class="form-control" type="password" id="old_password" name="old_password" required autofocus>
+							
+							<label for="new_password" class="col-form-label">New password</label>
+							<input class="form-control" type="password" id="new_password" name="new_password" required>
+							
+							<label for="confirm_password" class="col-form-label">Confirm new password</label>
+							<input class="form-control" type="password" id="confirm_password" name="confirm_password" required>
+							
+							<button type="submit" class="form-control btn btn-block btn-outline-primary margin-top-big">Update password</button>
+					  	</form>
+					  	
+					  	{{else}}
+					  	<form class="form-main col-6" id="signup_form" action="/signup" method="post" v-on:submit.prevent="signup">
+					  		
+					  		<div id="no_local_account_div" v-if="no_local_account" class="display-6 alert alert-warning" role="alert">You don't have local account yet.</div>
+					  		
+					  		<div id="signup_failed_div" v-if="signup_failed" class="alert alert-danger alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								\{{message}}
+							</div>
+					  		
+					  		<div id="signup_success_div" v-if="signup_success" class="alert alert-success alert-dismissible fade show" role="alert">
+								<button type="button" class="close" data-hide="alert" aria-label="Close">
+									<span aria-hidden="true">&times;</span>
+								</button>
+								\{{message}}
+							</div>
+					  		
+							<label for="user_name" class="col-form-label">User name</label>
+							<input type="text" id="user_name" class="form-control" name="user_name" value="{{userProfile.USERNAME}}" required> 
+							
+							<label for="signup_email" class="col-form-label">Email address</label>
+							<input type="email" id="signup_email" class="form-control" name="signup_email" value="{{userProfile.EMAIL}}" required>
+							
+							<label for="signup_password" class="col-form-label">Password</label> 
+							<input type="password" id="signup_password" class="form-control" name="signup_password" required autofocus>
+							
+							<button id="signup_button" type="submit" class="form-control btn btn-block btn-outline-primary margin-top-big">Create local account</button>
+							
+					  	</form>
+					  	{{/if}}
+					  	
+						</div>
+					  
+						<div class="mb-5"></div>
+					 
+						<div class="row justify-content-between">
+					 
+						 	<form class="form-main col-12" style="max-width: none;">
+						  		
+						  		<h1 class="display-4" style="margin-bottom: 1rem!important;">Your social accounts</h1>
+						  		
+								<table class="table table-striped">
+								  <!-- <thead>
+								    <tr>
+								      <th>Provider</th>
+								      <th>Username</th>
+								      <th>Avatar</th>
+								    </tr>
+								  </thead> -->
+								  <tbody>
+								  	{{#each userProfile.socialAccounts}}
+								    <tr>
+								      <td>{{this.SOCIAL_PROVIDER}}</td>
+								      <td>{{this.USERNAME}}</td>
+								      <td><img class="rounded" src="{{this.PHOTO_URL}}" alt="profile photo" width="32" height="32"></td>
+								      <td>Status</td>
+								      <td><button type="button" class="btn btn-outline-primary btn-sm">Disconnect</button></td>
+								    </tr>
+								   	{{/each}}
+								  </tbody>
+								</table> 
+							
+					  		</form>
+						</div>
+						
+				  	</div>
+				</div>
+  			</div>
+		</div>
+	
+	</div>
+	{{#if success}}
+	<script>
+		window.setTimeout(function() {
+		    $(".alert-success").fadeTo(500, 0).slideUp(500, function(){
+		        $(this).remove(); 
+		    });
+		}, 3000);
+	</script>
+	{{/if}}
+
+{{>footer.hbs}}

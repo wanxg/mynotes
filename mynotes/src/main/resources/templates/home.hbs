@@ -1,47 +1,7 @@
 {{>header.hbs}}
 
-	<nav class="navbar navbar-toggleable-md navbar-light bg-faded">
 
-		<button class="navbar-toggler navbar-toggler-right" type="button"
-			data-toggle="collapse" data-target="#navbarText"
-			aria-controls="navbarText" aria-expanded="false"
-			aria-label="Toggle navigation">
-			<span class="navbar-toggler-icon"></span>
-		</button>
+{{>navbar.hbs}}
 
-
-		<a class="navbar-brand" href="/"> <img src="pic/brand.png"
-			alt="brand">
-		</a>
-
-		<div class="navbar-collapse collapse" id="navbarText"
-			aria-expanded="false">
-			<ul class="navbar-nav mr-auto">
-				<li class="nav-item active"><a class="nav-link" href="home">
-						<span class="sr-only">(current)</span>
-				</a></li>
-				<li class="nav-item"><a class="nav-link" href="#"></a></li>
-				<li class="nav-item"><a class="nav-link" href="about"></a></li>
-			</ul>
-
-			<form class="form-inline">
-				<input class="form-control mr-sm-2" type="text" placeholder="Search">
-				<button class="btn btn-outline-primary my-2 my-sm-0" type="submit">Search</button>
-			</form>
-
-
-			<ul class="nav navbar-nav navbar-right">
-				<li class="dropdown">
-					<img class="btn dropdown-toggle" src="{{photoUrl}}" alt="dropdown image" data-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
-					
-					<ul class="dropdown-menu">
-						<li class="nav-item"><a class="dropdown-item" href="/profile">Profile<span class="caret"></span></a></li>
-						<li class="nav-item"><a class="dropdown-item" href="/logout">Log out <span class="caret"></span></a></li>
-					</ul>
-				</li>
-			</ul>
-		</div>
-
-	</nav>
 
 {{>footer.hbs}}

@@ -13,12 +13,14 @@ Remaining point is how to delete token if the cookie gets expired ???
 2. user role management, admin to manage the user
 
 
+	
 
-
-
+DROP TABLE PUBLIC.SOCIAL_USER	
 DROP TABLE PUBLIC.USER_ROLE
 DROP TABLE PUBLIC.USER_PROFILE
 DROP TABLE PUBLIC.ROLE_PERM
 DROP TABLE PUBLIC.AUTH_TOKEN
 DROP TABLE PUBLIC.LOCAL_USER
-DROP TABLE PUBLIC.SOCIAL_USER
+
+
+https://graph.facebook.com/user_id/picture?type=large

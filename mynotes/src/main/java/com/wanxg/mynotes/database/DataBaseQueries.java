@@ -86,7 +86,13 @@ public class DataBaseQueries {
 	
 	public static final String SQL_UPDATE_USER_SET_ACTIVE = "UPDATE local_user SET ACTIVE = ? WHERE email = ?";
 	
+	public static final String SQL_UPDATE_USER_PASSWORD = "UPDATE local_user SET password = ?, password_salt = ? WHERE uid = ?";
+	
 	public static final String SQL_INSERT_INTO_USER_PROFILE = "INSERT INTO user_profile (user_id,email,username,first_name,last_name,photo_url,gender) VALUES (?,?,?,?,?,?,?)";
+	
+	public static final String SQL_UPDATE_USER_PROFILE = "UPDATE user_profile SET username = ?, first_name = ?, last_name = ?, gender = ? WHERE pid = ?";
+	
+	public static final String SQL_UPDATE_USER_PROFILE_SET_UID = "UPDATE user_profile SET user_id = ? WHERE pid = ?";
 	
 	public static final String SQL_SELECT_USER_PROFILE_BY_USER_ID = "SELECT * FROM user_profile WHERE user_id = ?";
 	
@@ -99,6 +105,8 @@ public class DataBaseQueries {
 	public static final String SQL_UPDATE_SOCIAL_USER = "UPDATE social_user SET email = ?, username = ?, first_name = ?, last_name = ?, photo_url = ?, gender = ? WHERE external_id = ?";
 	
 	public static final String SQL_SELECT_SOCIAL_USER_BY_EXTERNAL_ID = "SELECT * FROM social_user WHERE external_id = ?";
+	
+	public static final String SQL_SELECT_SOCIAL_USER_BY_PROFILE_ID = "SELECT * FROM social_user WHERE profile_id = ?";
 	
 	public static final String SQL_SELECT_MAX_TOKEN_ID = "SELECT max(tid) FROM auth_token";
 	
